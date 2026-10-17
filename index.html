@@ -44,7 +44,12 @@ canvas{width:100%;height:240px;display:block}
 const $=s=>document.querySelector(s), app=$('#app');
 const money=n=>n==null?'—':'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const CFG=window.SWINGMOM_CONFIG, sb=supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);
+const CFG=window.SWINGMOM_CONFIG;
+function leerClave(){let k=null;const m=location.hash.match(/k=([A-Za-z0-9_-]+)/);try{if(m){k=m[1];localStorage.setItem('smk',k)}else k=localStorage.getItem('smk')}catch(e){if(m)k=m[1]}return k}
+const KEY=leerClave();
+const sb=KEY?supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{global:{headers:{'x-sm-key':KEY}},auth:{persistSession:false,autoRefreshToken:false}}):null;
+if(KEY&&!location.hash.includes('k='))history.replaceState(null,'','#k='+KEY);
+if(KEY){try{const m={name:'SwingMom',short_name:'SwingMom',start_url:location.pathname+'#k='+KEY,scope:location.pathname,display:'standalone',background_color:'#F2F2F7',theme_color:'#F2F2F7',icons:[{src:new URL('icon.svg',location.href).href,sizes:'any',type:'image/svg+xml',purpose:'any'}]};const l=document.querySelector('link[rel=manifest]');l.href=URL.createObjectURL(new Blob([JSON.stringify(m)],{type:'application/manifest+json'}))}catch(e){}}
 const ICON={hoy:'<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',cartera:'<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>',lab:'<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/>',claude:'<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>'};
 let S={tab:'hoy',scan:null,velas:{},pos:[],robots:[],ops:[],filtro:'Todas',det:null};
 const CLASE={NUCLEO:['Núcleo','ok','2% de riesgo'],CALIFICADA:['Calificada','ac','1% de riesgo'],ROBOT:['Solo robot','','Cuenta simulada'],VIGILANCIA:['Vigilancia','','Sin entrada']};
@@ -54,8 +59,7 @@ const CAP=10000,MAXPOS=3000;
 function nav(){const n=$('#nav');n.hidden=false;n.innerHTML=[['hoy','Hoy'],['cartera','Cartera'],['lab','Laboratorio'],['claude','Claude']].map(([k,l])=>`<button class="${S.tab===k?'on':''}" data-k="${k}"><svg viewBox="0 0 24 24">${ICON[k]}</svg><span>${l}</span></button>`).join('');
  n.querySelectorAll('button').forEach(b=>b.onclick=()=>{S.tab=b.dataset.k;S.det=null;render()})}
 
-async function login(){app.innerHTML=`<div class="sub">Acceso privado</div><h1>SwingMom</h1><div class="card pad" style="margin-top:20px"><input id="em" type="email" placeholder="Correo" autocomplete="username"><input id="pw" type="password" placeholder="Contraseña" autocomplete="current-password"><button class="btn" id="go">Entrar</button><div id="err" class="muted dn" style="margin-top:8px"></div></div>`;
- $('#go').onclick=async()=>{const{error}=await sb.auth.signInWithPassword({email:$('#em').value,password:$('#pw').value});if(error)$('#err').textContent='No se pudo entrar: '+error.message;else start()}}
+function sinClave(msg){$('#nav').hidden=true;app.innerHTML=`<div class="sub">Acceso privado</div><h1>SwingMom</h1><div class="card pad" style="margin-top:20px"><p class="muted" style="margin:0">${msg||'Abre tu enlace privado una vez y la app queda lista en este dispositivo. También puedes pegarlo aquí:'}</p><input id="lk" placeholder="Pega tu enlace privado"><button class="btn" id="go">Entrar</button></div>`;$('#go').onclick=()=>{const m=$('#lk').value.match(/k=([A-Za-z0-9_-]+)/);if(m){try{localStorage.setItem('smk',m[1])}catch(e){}location.hash='k='+m[1];location.reload()}}}
 
 async function load(){
  const[a,b,c,d,e]=await Promise.all([
@@ -64,7 +68,7 @@ async function load(){
   sb.from('sm_robots').select('*').order('creado_en'),
   sb.from('sm_robot_operaciones').select('robot_id,estado,resultado_r'),
   sb.from('sm_velas').select('ticker,barras')]);
- S.scan=a.data?.[0]||null;S.pos=b.data||[];S.robots=c.data||[];S.ops=d.data||[];S.velas={};(e.data||[]).forEach(v=>S.velas[v.ticker]=v.barras)}
+ S.err=a.error?a.error.message:null;S.scan=a.data?.[0]||null;S.pos=b.data||[];S.robots=c.data||[];S.ops=d.data||[];S.velas={};(e.data||[]).forEach(v=>S.velas[v.ticker]=v.barras)}
 
 function sizing(r){const rk=RISK[r.clase];if(!rk)return null;const riskUsd=CAP*rk,dist=r.price-r.stop;if(dist<=0)return null;
  let sh=Math.floor(riskUsd/dist);sh=Math.min(sh,Math.floor(MAXPOS/r.price));return{sh,val:sh*r.price,riesgo:sh*dist}}
@@ -125,7 +129,7 @@ function lab(){const por=id=>{const o=S.ops.filter(x=>x.robot_id===id),c=o.filte
 function claudeTab(){app.innerHTML=`<div class="sub">Con tu cartera y el escáner como contexto</div><h1>Claude</h1><div class="card pad"><p style="margin:0" class="muted">${S.ctx?`Verificación de <b>${esc(S.ctx)}</b> lista para lanzarse. `:''}El chat con análisis completo (noticias, banderas de riesgo, lectura de capturas de TradingView y bitácora de veredictos) se conecta en la Fase 3, con tu llave de Anthropic API guardada solo como secreto de servidor.</p></div>`}
 
 function render(){nav();if(S.det&&S.scan)return detalle();({hoy,cartera,lab,claude:claudeTab})[S.tab]()}
-async function start(){const{data}=await sb.auth.getSession();if(!data.session){$('#nav').hidden=true;return login()}app.innerHTML='<p class="muted">Cargando…</p>';await load();render()}
+async function start(){if(!sb)return sinClave();app.innerHTML='<p class="muted">Cargando…</p>';await load();if(S.err){try{localStorage.removeItem('smk')}catch(e){}return sinClave('No se pudo leer con esta clave ('+S.err+'). Abre de nuevo tu enlace privado.')}render()}
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 start();
 </script>
