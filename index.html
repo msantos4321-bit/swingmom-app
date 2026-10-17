@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F2F2F7">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg">
+<title>SwingMom</title>
+<style>
+:root{--bg:#F2F2F7;--card:#fff;--tx:#1C1C1E;--tx2:#6C6C70;--ac:#0062CC;--acbg:#E4EEFB;--ok:#1B6B33;--okbg:#E3F4E8;--bad:#B3261E;--badbg:#FCE8E6;--warn:#8A4B00;--warnbg:#FFF1DC;--line:#E5E5EA;--chip:#EDEDF2}
+@media(prefers-color-scheme:dark){:root{--bg:#000;--card:#1C1C1E;--tx:#F2F2F7;--tx2:#A1A1A6;--ac:#4DA3FF;--acbg:#16304F;--ok:#5BD07A;--okbg:#14301D;--bad:#FF8A80;--badbg:#3A1B19;--warn:#FFC266;--warnbg:#3A2A12;--line:#38383A;--chip:#2C2C2E}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+#app{max-width:520px;margin:0 auto;min-height:100vh;padding:calc(env(safe-area-inset-top) + 24px) 16px calc(100px + env(safe-area-inset-bottom))}
+h1{font-size:34px;letter-spacing:-.02em;margin:2px 0 0}h2{font-size:20px;margin:20px 4px 8px;letter-spacing:-.01em}
+.sub{font-size:13px;color:var(--tx2);font-weight:500}
+.card{background:var(--card);border-radius:20px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.04);margin-bottom:12px}
+.pad{padding:16px}.row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:0 16px;border-bottom:1px solid var(--line)}.row:last-child{border:0}
+.row .k{font-size:15px;color:var(--tx2)}.row .v{font-size:17px;font-weight:600;white-space:nowrap}
+.item{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);cursor:pointer;min-height:64px}.item:last-child{border:0}
+.grow{flex:1;min-width:0}.t{font-size:17px;font-weight:600}.s{font-size:13px;color:var(--tx2)}.r{text-align:right}
+.pill{display:inline-block;font-size:11px;font-weight:700;border-radius:6px;padding:2px 7px;background:var(--chip);color:var(--tx);margin-left:6px;vertical-align:middle}
+.pill.ok{background:var(--okbg);color:var(--ok)}.pill.bad{background:var(--badbg);color:var(--bad)}.pill.warn{background:var(--warnbg);color:var(--warn)}.pill.ac{background:var(--acbg);color:var(--ac)}
+.up{color:var(--ok)}.dn{color:var(--bad)}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;height:calc(84px + env(safe-area-inset-bottom) - 20px);padding:8px 8px calc(env(safe-area-inset-bottom));background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(20px);border-top:1px solid var(--line);max-width:520px;margin:0 auto}
+nav button{flex:1;border:0;background:none;color:var(--tx2);font-size:11px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:4px;min-height:44px;cursor:pointer}
+nav button.on{color:var(--ac)}nav svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.btn{display:flex;align-items:center;justify-content:center;min-height:50px;border-radius:14px;border:0;background:var(--ac);color:#fff;font-size:17px;font-weight:600;width:100%;cursor:pointer;margin-top:8px}
+.btn.sec{background:var(--acbg);color:var(--ac)}
+input,select{width:100%;min-height:44px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--tx);padding:0 14px;font-size:16px;margin-top:8px;font-family:inherit}
+.seg{display:flex;padding:2px;border-radius:10px;background:var(--chip);margin:12px 0}.seg button{flex:1;min-height:32px;border:0;border-radius:8px;background:none;color:var(--tx2);font-size:14px;font-weight:600}.seg button.on{background:var(--card);color:var(--tx);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.aviso{background:var(--warnbg);color:var(--warn);border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.4;margin-top:12px}
+.back{background:none;border:0;color:var(--ac);font-size:17px;min-height:44px;padding:0;cursor:pointer}
+canvas{width:100%;height:240px;display:block}
+.muted{color:var(--tx2);font-size:14px;line-height:1.45}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<nav id="nav" hidden></nav>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.58.0/dist/umd/supabase.min.js"></script>
+<script>
+const $=s=>document.querySelector(s), app=$('#app');
+const money=n=>n==null?'—':'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const CFG=window.SWINGMOM_CONFIG, sb=supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY);
+const ICON={hoy:'<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',cartera:'<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>',lab:'<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/>',claude:'<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>'};
+let S={tab:'hoy',scan:null,velas:{},pos:[],robots:[],ops:[],filtro:'Todas',det:null};
+const CLASE={NUCLEO:['Núcleo','ok','2% de riesgo'],CALIFICADA:['Calificada','ac','1% de riesgo'],ROBOT:['Solo robot','','Cuenta simulada'],VIGILANCIA:['Vigilancia','','Sin entrada']};
+const RISK={NUCLEO:.02,CALIFICADA:.01};
+const CAP=10000,MAXPOS=3000;
+
+function nav(){const n=$('#nav');n.hidden=false;n.innerHTML=[['hoy','Hoy'],['cartera','Cartera'],['lab','Laboratorio'],['claude','Claude']].map(([k,l])=>`<button class="${S.tab===k?'on':''}" data-k="${k}"><svg viewBox="0 0 24 24">${ICON[k]}</svg><span>${l}</span></button>`).join('');
+ n.querySelectorAll('button').forEach(b=>b.onclick=()=>{S.tab=b.dataset.k;S.det=null;render()})}
+
+async function login(){app.innerHTML=`<div class="sub">Acceso privado</div><h1>SwingMom</h1><div class="card pad" style="margin-top:20px"><input id="em" type="email" placeholder="Correo" autocomplete="username"><input id="pw" type="password" placeholder="Contraseña" autocomplete="current-password"><button class="btn" id="go">Entrar</button><div id="err" class="muted dn" style="margin-top:8px"></div></div>`;
+ $('#go').onclick=async()=>{const{error}=await sb.auth.signInWithPassword({email:$('#em').value,password:$('#pw').value});if(error)$('#err').textContent='No se pudo entrar: '+error.message;else start()}}
+
+async function load(){
+ const[a,b,c,d,e]=await Promise.all([
+  sb.from('sm_scans').select('creado_en,scan_time,version,mercado_ok,mercado_txt,resumen,payload').order('creado_en',{ascending:false}).limit(1),
+  sb.from('sm_posiciones').select('*').eq('estado','abierta').order('cuenta'),
+  sb.from('sm_robots').select('*').order('creado_en'),
+  sb.from('sm_robot_operaciones').select('robot_id,estado,resultado_r'),
+  sb.from('sm_velas').select('ticker,barras')]);
+ S.scan=a.data?.[0]||null;S.pos=b.data||[];S.robots=c.data||[];S.ops=d.data||[];S.velas={};(e.data||[]).forEach(v=>S.velas[v.ticker]=v.barras)}
+
+function sizing(r){const rk=RISK[r.clase];if(!rk)return null;const riskUsd=CAP*rk,dist=r.price-r.stop;if(dist<=0)return null;
+ let sh=Math.floor(riskUsd/dist);sh=Math.min(sh,Math.floor(MAXPOS/r.price));return{sh,val:sh*r.price,riesgo:sh*dist}}
+
+function hoy(){const sc=S.scan;if(!sc){app.innerHTML=`<div class="sub">Sin datos todavía</div><h1>Hoy</h1><p class="muted">Aún no hay ningún escaneo en la base. Lanza el workflow en GitHub (Actions → SwingMom scan → Run workflow).</p>`;return}
+ const rs=sc.payload.results.filter(r=>r.tier<=5&&!r.ya_en_otra_cuenta||r.tier<=3);
+ const g=c=>sc.payload.results.filter(r=>r.tier<=3&&r.clase===c);
+ const fecha=new Date(sc.creado_en).toLocaleString('es-MX',{timeZone:'America/Tijuana',dateStyle:'medium',timeStyle:'short'});
+ const blk=(tit,arr,vacio)=>`<h2>${tit}</h2><div class="card">${arr.length?arr.map(it).join(''):`<div class="pad muted">${vacio}</div>`}</div>`;
+ const it=r=>{const c=CLASE[r.clase]||['','',''];return`<div class="item" data-tk="${r.ticker}"><div class="grow"><div class="t">${r.ticker}<span class="pill ${c[1]}">${c[0]}</span>${r.ya_en_otra_cuenta?'<span class="pill warn">Ya en otra cuenta</span>':''}</div><div class="s">Tier ${r.tier} · score ${Math.round(r.total_score)} · ${esc(r.sector||'')}</div></div><div class="r"><div class="t">${money(r.price)}</div><div class="s">Stop ${money(r.stop)}</div></div></div>`};
+ app.innerHTML=`<div class="sub">${fecha} · hora de Tijuana · v${esc(sc.version)}</div><h1>Hoy</h1>
+ ${sc.mercado_ok?'':`<div class="aviso"><b>Mercado inactivo (aviso).</b> ${esc(sc.mercado_txt||'')}. No es un veto: el backtest no respalda esperar, pero entra con la disciplina de siempre.</div>`}
+ ${blk('Núcleo · 2% de riesgo',g('NUCLEO'),'Hoy no hay señales núcleo.')}
+ ${blk('Calificadas · 1% de riesgo',g('CALIFICADA'),'Sin calificadas hoy.')}
+ ${blk('Solo robot (simulado)',g('ROBOT'),'Nada para el laboratorio hoy.')}
+ ${blk('Vigilancia',sc.payload.results.filter(r=>r.tier===4).slice(0,8),'Sin candidatos cercanos.')}`;
+ app.querySelectorAll('.item[data-tk]').forEach(e=>e.onclick=()=>{S.det=e.dataset.tk;render()})}
+
+function velas(canvas,bars,r){const dpr=devicePixelRatio||1,W=canvas.clientWidth,H=canvas.clientHeight;canvas.width=W*dpr;canvas.height=H*dpr;const x=canvas.getContext('2d');x.scale(dpr,dpr);
+ const b=bars.slice(-90);const hi=Math.max(...b.map(v=>v.h),r.tp2||0),lo=Math.min(...b.map(v=>v.l),r.stop||1e9);const pad=(hi-lo)*.05,mx=hi+pad,mn=lo-pad;
+ const Y=p=>H-16-(p-mn)/(mx-mn)*(H-24),w=W/b.length,css=getComputedStyle(document.documentElement);
+ const up=css.getPropertyValue('--ok'),dn=css.getPropertyValue('--bad'),tx2=css.getPropertyValue('--tx2');
+ [[r.tp2,up],[r.tp1,up],[r.price,tx2],[r.stop,dn]].forEach(([p,c])=>{if(!p)return;x.strokeStyle=c;x.setLineDash([4,4]);x.beginPath();x.moveTo(0,Y(p));x.lineTo(W,Y(p));x.stroke()});x.setLineDash([]);
+ b.forEach((v,i)=>{const c=v.c>=v.o?up:dn,cx=i*w+w/2;x.strokeStyle=c;x.fillStyle=c;x.beginPath();x.moveTo(cx,Y(v.h));x.lineTo(cx,Y(v.l));x.stroke();const t=Y(Math.max(v.o,v.c)),h=Math.max(1,Math.abs(Y(v.o)-Y(v.c)));x.fillRect(cx-w*.35,t,w*.7,h)})}
+
+function detalle(){const r=S.scan.payload.results.find(x=>x.ticker===S.det);const c=CLASE[r.clase]||['','',''];const sz=sizing(r);const bars=S.velas[r.ticker];
+ app.innerHTML=`<button class="back" id="bk">‹ Hoy</button><div style="display:flex;justify-content:space-between;align-items:flex-end"><div><h1>${r.ticker}</h1><div class="sub">${esc(r.tier_label||'Tier '+r.tier)} · ${esc(r.sector||'')}</div></div><span class="pill ${c[1]}" style="font-size:14px;padding:8px 14px;border-radius:999px">${c[0]}</span></div>
+ <div class="card" style="margin-top:16px">${bars?'<canvas id="cv"></canvas>':'<div class="pad muted">Sin velas guardadas para este ticker (se guardan Tier 1–4 y tu cartera).</div>'}</div>
+ <div class="card">
+ <div class="row"><span class="k">Entrada ideal</span><span class="v">${money(r.price)}</span></div>
+ <div class="row"><span class="k">Stop</span><span class="v dn">${money(r.stop)}</span></div>
+ <div class="row"><span class="k">TP1 · stop a breakeven</span><span class="v up">${money(r.tp1)}</span></div>
+ <div class="row"><span class="k">TP2 · salida final</span><span class="v up">${money(r.tp2)}</span></div>
+ <div class="row"><span class="k">Tamaño (${c[2]})</span><span class="v">${sz?sz.sh+' acc. · '+money(sz.val):'—'}</span></div>
+ <div class="row"><span class="k">Riesgo en dólares</span><span class="v">${sz?money(sz.riesgo):'—'}</span></div>
+ <div class="row"><span class="k">Earnings</span><span class="v">${esc(r.earn_label||'—')}</span></div>
+ <div class="row"><span class="k">Rango 52 sem. · RS</span><span class="v">${Math.round(r.pos52)}% · ${r.rs_rating}</span></div>
+ <div class="row"><span class="k">Escenario histórico</span><span class="v">${esc(r.escenario_label||'—')}</span></div></div>
+ <p class="muted" style="padding:0 4px">Tamaño sobre $10,000, tope $3,000 por posición. Antes de entrar: verificación con Claude (pestaña Claude). El stop debe ser una orden real en el broker.</p>
+ <button class="btn" id="vr">Verificar con Claude</button>`;
+ $('#bk').onclick=()=>{S.det=null;render()};$('#vr').onclick=()=>{S.tab='claude';S.ctx=r.ticker;render()};if(bars)velas($('#cv'),bars,r)}
+
+function cartera(){const f=S.filtro,lista=S.pos.filter(p=>f==='Todas'||p.cuenta===f);const last={};(S.scan?.payload.results||[]).forEach(r=>last[r.ticker]=r.price);
+ const grupo=c=>{const l=lista.filter(p=>p.cuenta===c);if(!l.length)return'';return`<h2>${c==='IBKR'?'Interactive Brokers':'eToro'}</h2><div class="card">${l.map(p=>{const px=last[p.ticker],pl=px&&p.entrada&&p.acciones&&p.tipo!=='apalancada'?(px-p.entrada)*p.acciones:null,pc=px&&p.entrada?(px/p.entrada-1)*100:null;
+  return`<div class="item"><div class="grow"><div class="t">${esc(p.ticker)}<span class="pill ${p.tipo==='apalancada'?'warn':''}">${p.tipo==='apalancada'?'Apalancada':'Acciones'}</span>${px&&p.stop&&px<=p.stop?'<span class="pill bad">Bajo el stop</span>':''}</div><div class="s">${p.acciones??'—'} u. · Entrada ${money(p.entrada)}</div><div class="s">Stop ${money(p.stop)} · TP ${money(p.tp)}</div></div><div class="r"><div class="t ${pl>=0?'up':'dn'}">${pl==null?'—':(pl>=0?'+':'')+money(pl)}</div><div class="s ${pc>=0?'up':'dn'}">${pc==null?'':(pc>=0?'+':'')+pc.toFixed(1)+'%'}</div></div></div>`}).join('')}</div>`};
+ app.innerHTML=`<div class="sub">Precios del último escaneo</div><h1>Cartera</h1><div class="seg">${['Todas','IBKR','eToro'].map(x=>`<button class="${f===x?'on':''}" data-f="${x}">${x}</button>`).join('')}</div>${grupo('IBKR')||''}${grupo('eToro')||''}${lista.length?'':'<p class="muted">Sin posiciones registradas. Se cargan desde una captura (Claude la lee y las registra) — Fase 3.</p>'}
+ <button class="btn sec" id="add">Registrar posición</button>`;
+ app.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{S.filtro=b.dataset.f;render()});
+ $('#add').onclick=()=>{app.insertAdjacentHTML('beforeend',`<div class="card pad" style="margin-top:12px"><select id="fc"><option>IBKR</option><option>eToro</option></select><select id="ft"><option value="acciones">Acciones</option><option value="apalancada">Apalancada</option></select><input id="fk" placeholder="Ticker"><input id="fa" type="number" step="any" placeholder="Acciones / unidades"><input id="fe" type="number" step="any" placeholder="Entrada"><input id="fs" type="number" step="any" placeholder="Stop"><input id="fp" type="number" step="any" placeholder="Take profit"><button class="btn" id="sv">Guardar</button></div>`);
+  $('#sv').onclick=async()=>{const n=id=>$(id).value?Number($(id).value):null;await sb.from('sm_posiciones').insert({cuenta:$('#fc').value,tipo:$('#ft').value,ticker:$('#fk').value.toUpperCase().trim(),acciones:n('#fa'),entrada:n('#fe'),stop:n('#fs'),tp:n('#fp'),abierta_en:new Date().toISOString().slice(0,10)});await load();render()}}}
+
+function lab(){const por=id=>{const o=S.ops.filter(x=>x.robot_id===id),c=o.filter(x=>x.estado!=='abierta');return{n:c.length,ab:o.length-c.length,r:c.length?c.reduce((a,x)=>a+Number(x.resultado_r||0),0)/c.length:null}};
+ app.innerHTML=`<div class="sub">Cuentas simuladas y robots</div><h1>Laboratorio</h1>
+ <div class="card pad"><div class="sub" style="font-weight:600">Ruta de un robot</div><div style="display:flex;gap:6px;margin-top:10px;align-items:center;text-align:center;font-size:12px;font-weight:700"><span class="pill ac" style="flex:1;padding:7px 0;margin:0">Simulado</span>›<span class="pill" style="flex:1;padding:7px 0;margin:0">Auditado</span>›<span class="pill" style="flex:1;padding:7px 0;margin:0">Real</span></div><p class="muted" style="margin:10px 0 0">Un robot pasa a cuenta real solo con tu aprobación, después de ≥100 operaciones y su auditoría.</p></div>
+ <h2>Robots</h2><div class="card">${S.robots.map(r=>{const p=por(r.id);return`<div class="item"><div class="grow"><div class="t">${esc(r.nombre)}</div><div class="s">${esc(r.descripcion||'')}</div></div><div class="r"><span class="pill ok">${esc(r.estado)}</span><div class="s">${p.n} cerradas · ${p.ab} abiertas${p.r!=null?' · '+p.r.toFixed(2)+'R':''}</div></div></div>`}).join('')||'<div class="pad muted">Sin robots.</div>'}</div>
+ <p class="muted" style="padding:0 4px">El motor que abre y cierra operaciones simuladas con cada escaneo llega en la Fase 2.</p>`}
+
+function claudeTab(){app.innerHTML=`<div class="sub">Con tu cartera y el escáner como contexto</div><h1>Claude</h1><div class="card pad"><p style="margin:0" class="muted">${S.ctx?`Verificación de <b>${esc(S.ctx)}</b> lista para lanzarse. `:''}El chat con análisis completo (noticias, banderas de riesgo, lectura de capturas de TradingView y bitácora de veredictos) se conecta en la Fase 3, con tu llave de Anthropic API guardada solo como secreto de servidor.</p></div>`}
+
+function render(){nav();if(S.det&&S.scan)return detalle();({hoy,cartera,lab,claude:claudeTab})[S.tab]()}
+async function start(){const{data}=await sb.auth.getSession();if(!data.session){$('#nav').hidden=true;return login()}app.innerHTML='<p class="muted">Cargando…</p>';await load();render()}
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+start();
+</script>
+</body>
+</html>
