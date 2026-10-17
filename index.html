@@ -68,7 +68,7 @@ async function load(){
   sb.from('sm_robots').select('*').order('creado_en'),
   sb.from('sm_robot_operaciones').select('robot_id,estado,resultado_r'),
   sb.from('sm_velas').select('ticker,barras')]);
- S.err=a.error?a.error.message:null;S.scan=a.data?.[0]||null;S.pos=b.data||[];S.robots=c.data||[];S.ops=d.data||[];S.velas={};(e.data||[]).forEach(v=>S.velas[v.ticker]=v.barras)}
+ S.err=a.error?a.error.message:null;S.scan=a.data?.[0]||null;S.pos=b.data||[];S.robots=c.data||[];S.ops=d.data||[];S.velas={};(e.data||[]).forEach(v=>S.velas[v.ticker]=v.barras);try{await cargarLab()}catch(x){}}
 
 function sizing(r){const rk=RISK[r.clase];if(!rk)return null;const riskUsd=CAP*rk,dist=r.price-r.stop;if(dist<=0)return null;
  let sh=Math.floor(riskUsd/dist);sh=Math.min(sh,Math.floor(MAXPOS/r.price));return{sh,val:sh*r.price,riesgo:sh*dist}}
@@ -79,13 +79,13 @@ function hoy(){const sc=S.scan;if(!sc){app.innerHTML=`<div class="sub">Sin datos
  const fecha=new Date(sc.creado_en).toLocaleString('es-MX',{timeZone:'America/Tijuana',dateStyle:'medium',timeStyle:'short'});
  const blk=(tit,arr,vacio)=>`<h2>${tit}</h2><div class="card">${arr.length?arr.map(it).join(''):`<div class="pad muted">${vacio}</div>`}</div>`;
  const it=r=>{const c=CLASE[r.clase]||['','',''];return`<div class="item" data-tk="${r.ticker}"><div class="grow"><div class="t">${r.ticker}<span class="pill ${c[1]}">${c[0]}</span>${r.ya_en_otra_cuenta?'<span class="pill warn">Ya en otra cuenta</span>':''}</div><div class="s">Tier ${r.tier} · score ${Math.round(r.total_score)} · ${esc(r.sector||'')}</div></div><div class="r"><div class="t">${money(r.price)}</div><div class="s">Stop ${money(r.stop)}</div></div></div>`};
- app.innerHTML=`<div class="sub">${fecha} · hora de Tijuana · v${esc(sc.version)}</div><h1>Hoy</h1>
+ app.innerHTML=`<div class="sub">${fecha} · hora de Tijuana · v${esc(sc.version)}</div><h1>Hoy</h1>${saludPill()}
  ${sc.mercado_ok?'':`<div class="aviso"><b>Mercado inactivo (aviso).</b> ${esc(sc.mercado_txt||'')}. No es un veto: el backtest no respalda esperar, pero entra con la disciplina de siempre.</div>`}
  ${blk('Núcleo · 2% de riesgo',g('NUCLEO'),'Hoy no hay señales núcleo.')}
  ${blk('Calificadas · 1% de riesgo',g('CALIFICADA'),'Sin calificadas hoy.')}
  ${blk('Solo robot (simulado)',g('ROBOT'),'Nada para el laboratorio hoy.')}
  ${blk('Vigilancia',sc.payload.results.filter(r=>r.tier===4).slice(0,8),'Sin candidatos cercanos.')}`;
- app.querySelectorAll('.item[data-tk]').forEach(e=>e.onclick=()=>{S.det=e.dataset.tk;render()})}
+ app.querySelectorAll('.item[data-tk]').forEach(e=>e.onclick=()=>{S.det=e.dataset.tk;render()});const sp=$('#sp');if(sp)sp.onclick=()=>{S.tab='lab';L.vista='salud';render()}}
 
 function velas(canvas,bars,r){const dpr=devicePixelRatio||1,W=canvas.clientWidth,H=canvas.clientHeight;canvas.width=W*dpr;canvas.height=H*dpr;const x=canvas.getContext('2d');x.scale(dpr,dpr);
  const b=bars.slice(-90);const hi=Math.max(...b.map(v=>v.h),r.tp2||0),lo=Math.min(...b.map(v=>v.l),r.stop||1e9);const pad=(hi-lo)*.05,mx=hi+pad,mn=lo-pad;
@@ -120,16 +120,11 @@ function cartera(){const f=S.filtro,lista=S.pos.filter(p=>f==='Todas'||p.cuenta=
  $('#add').onclick=()=>{app.insertAdjacentHTML('beforeend',`<div class="card pad" style="margin-top:12px"><select id="fc"><option>IBKR</option><option>eToro</option></select><select id="ft"><option value="acciones">Acciones</option><option value="apalancada">Apalancada</option></select><input id="fk" placeholder="Ticker"><input id="fa" type="number" step="any" placeholder="Acciones / unidades"><input id="fe" type="number" step="any" placeholder="Entrada"><input id="fs" type="number" step="any" placeholder="Stop"><input id="fp" type="number" step="any" placeholder="Take profit"><button class="btn" id="sv">Guardar</button></div>`);
   $('#sv').onclick=async()=>{const n=id=>$(id).value?Number($(id).value):null;await sb.from('sm_posiciones').insert({cuenta:$('#fc').value,tipo:$('#ft').value,ticker:$('#fk').value.toUpperCase().trim(),acciones:n('#fa'),entrada:n('#fe'),stop:n('#fs'),tp:n('#fp'),abierta_en:new Date().toISOString().slice(0,10)});await load();render()}}}
 
-function lab(){const por=id=>{const o=S.ops.filter(x=>x.robot_id===id),c=o.filter(x=>x.estado!=='abierta');return{n:c.length,ab:o.length-c.length,r:c.length?c.reduce((a,x)=>a+Number(x.resultado_r||0),0)/c.length:null}};
- app.innerHTML=`<div class="sub">Cuentas simuladas y robots</div><h1>Laboratorio</h1>
- <div class="card pad"><div class="sub" style="font-weight:600">Ruta de un robot</div><div style="display:flex;gap:6px;margin-top:10px;align-items:center;text-align:center;font-size:12px;font-weight:700"><span class="pill ac" style="flex:1;padding:7px 0;margin:0">Simulado</span>›<span class="pill" style="flex:1;padding:7px 0;margin:0">Auditado</span>›<span class="pill" style="flex:1;padding:7px 0;margin:0">Real</span></div><p class="muted" style="margin:10px 0 0">Un robot pasa a cuenta real solo con tu aprobación, después de ≥100 operaciones y su auditoría.</p></div>
- <h2>Robots</h2><div class="card">${S.robots.map(r=>{const p=por(r.id);return`<div class="item"><div class="grow"><div class="t">${esc(r.nombre)}</div><div class="s">${esc(r.descripcion||'')}</div></div><div class="r"><span class="pill ok">${esc(r.estado)}</span><div class="s">${p.n} cerradas · ${p.ab} abiertas${p.r!=null?' · '+p.r.toFixed(2)+'R':''}</div></div></div>`}).join('')||'<div class="pad muted">Sin robots.</div>'}</div>
- <p class="muted" style="padding:0 4px">El motor que abre y cierra operaciones simuladas con cada escaneo llega en la Fase 2.</p>`}
-
 function claudeTab(){app.innerHTML=`<div class="sub">Con tu cartera y el escáner como contexto</div><h1>Claude</h1><div class="card pad"><p style="margin:0" class="muted">${S.ctx?`Verificación de <b>${esc(S.ctx)}</b> lista para lanzarse. `:''}El chat con análisis completo (noticias, banderas de riesgo, lectura de capturas de TradingView y bitácora de veredictos) se conecta en la Fase 3, con tu llave de Anthropic API guardada solo como secreto de servidor.</p></div>`}
 
 function render(){nav();if(S.det&&S.scan)return detalle();({hoy,cartera,lab,claude:claudeTab})[S.tab]()}
-async function start(){if(!sb)return sinClave();app.innerHTML='<p class="muted">Cargando…</p>';await load();if(S.err){try{localStorage.removeItem('smk')}catch(e){}return sinClave('No se pudo leer con esta clave ('+S.err+'). Abre de nuevo tu enlace privado.')}render()}
+const cargarScripts=()=>['esquema.js','lab.js'].reduce((p,f)=>p.then(()=>new Promise((ok,no)=>{const e=document.createElement('script');e.src=f;e.onload=ok;e.onerror=()=>no(new Error('No cargó '+f));document.head.appendChild(e)})),Promise.resolve());
+async function start(){if(!sb)return sinClave();try{await cargarScripts()}catch(e){app.innerHTML='<p class="muted">'+esc(e.message)+'</p>';return}app.innerHTML='<p class="muted">Cargando…</p>';await load();if(S.err){try{localStorage.removeItem('smk')}catch(e){}return sinClave('No se pudo leer con esta clave ('+S.err+'). Abre de nuevo tu enlace privado.')}render()}
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 start();
 </script>
