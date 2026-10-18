@@ -33,6 +33,21 @@ input,select{width:100%;min-height:44px;border:1px solid var(--line);border-radi
 .back{background:none;border:0;color:var(--ac);font-size:17px;min-height:44px;padding:0;cursor:pointer}
 canvas{width:100%;height:240px;display:block}
 .muted{color:var(--tx2);font-size:14px;line-height:1.45}
+.bub{max-width:88%;padding:10px 14px;border-radius:18px;font-size:16px;line-height:1.42;margin:8px 0;word-wrap:break-word}
+.bub.u{margin-left:auto;background:var(--ac);color:#fff;border-bottom-right-radius:6px}
+.bub.a{background:var(--card);border-bottom-left-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.04);max-width:96%}
+.bub.err{background:var(--badbg);color:var(--bad)}
+.bub .meta{font-size:12px;color:var(--tx2);margin-top:8px}
+.bub .src{display:inline-block;font-size:12px;font-weight:600;border-radius:8px;padding:3px 8px;background:var(--chip);color:var(--ac);text-decoration:none;margin:6px 6px 0 0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dots i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--tx2);margin-right:4px;animation:pp 1.2s infinite ease-in-out}.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
+@keyframes pp{0%,80%,100%{opacity:.25}40%{opacity:1}}
+.composer{position:fixed;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom));max-width:520px;margin:0 auto;display:flex;gap:8px;align-items:flex-end;padding:8px 12px;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(20px)}
+.composer textarea{flex:1;min-height:44px;max-height:120px;border:1px solid var(--line);border-radius:22px;background:var(--card);color:var(--tx);padding:11px 16px;font-size:16px;font-family:inherit;resize:none;margin:0}
+.composer button{width:44px;height:44px;border-radius:50%;border:0;background:var(--ac);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}.composer button:disabled{opacity:.4}
+.composer svg{width:22px;height:22px;fill:none;stroke:#fff;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.chips button{border:0;border-radius:16px;background:var(--acbg);color:var(--ac);font-size:14px;font-weight:600;padding:9px 14px;cursor:pointer;min-height:36px}
+.steps{margin:10px 0 0;padding-left:20px;font-size:15px;line-height:1.5}.steps li{margin-bottom:6px}.steps a{color:var(--ac);font-weight:600}
+.linkbtn{background:none;border:0;color:var(--ac);font-size:14px;cursor:pointer;padding:6px 0;min-height:32px}
 </style>
 </head>
 <body>
@@ -149,7 +164,7 @@ function detalle(){const r=S.scan.payload.results.find(x=>x.ticker===S.det);cons
  <div class="row"><span class="k">Escenario histórico</span><span class="v">${esc(r.escenario_label||'—')}</span></div></div>
  <p class="muted" style="padding:0 4px">Tamaño sobre $10,000, tope $3,000 por posición. Antes de entrar: verificación con Claude (pestaña Claude). El stop debe ser una orden real en el broker.</p>
  <button class="btn" id="vr">Verificar con Claude</button>`;
- $('#bk').onclick=()=>{S.det=null;render()};$('#vr').onclick=()=>{S.tab='claude';S.ctx=r.ticker;render()};if(bars)velas($('#cv'),bars,r)}
+ $('#bk').onclick=()=>{S.det=null;render()};$('#vr').onclick=()=>{S.tab='claude';S.ctx=r.ticker;S.det=null;render()};if(bars)velas($('#cv'),bars,r)}
 
 function cartera(){const f=S.filtro,lista=S.pos.filter(p=>f==='Todas'||p.cuenta===f);const last={};(S.scan?.payload.results||[]).forEach(r=>last[r.ticker]=r.price);
  const grupo=c=>{const l=lista.filter(p=>p.cuenta===c);if(!l.length)return'';return`<h2>${c==='IBKR'?'Interactive Brokers':'eToro'}</h2><div class="card">${l.map(p=>{const px=last[p.ticker],pl=px&&p.entrada&&p.acciones&&p.tipo!=='apalancada'?(px-p.entrada)*p.acciones:null,pc=px&&p.entrada?(px/p.entrada-1)*100:null;
@@ -160,7 +175,60 @@ function cartera(){const f=S.filtro,lista=S.pos.filter(p=>f==='Todas'||p.cuenta=
  $('#add').onclick=()=>{app.insertAdjacentHTML('beforeend',`<div class="card pad" style="margin-top:12px"><select id="fc"><option>IBKR</option><option>eToro</option></select><select id="ft"><option value="acciones">Acciones</option><option value="apalancada">Apalancada</option></select><input id="fk" placeholder="Ticker"><input id="fa" type="number" step="any" placeholder="Acciones / unidades"><input id="fe" type="number" step="any" placeholder="Entrada"><input id="fs" type="number" step="any" placeholder="Stop"><input id="fp" type="number" step="any" placeholder="Take profit"><button class="btn" id="sv">Guardar</button></div>`);
   $('#sv').onclick=async()=>{const n=id=>$(id).value?Number($(id).value):null;await sb.from('sm_posiciones').insert({cuenta:$('#fc').value,tipo:$('#ft').value,ticker:$('#fk').value.toUpperCase().trim(),acciones:n('#fa'),entrada:n('#fe'),stop:n('#fs'),tp:n('#fp'),abierta_en:new Date().toISOString().slice(0,10)});await load();render()}}}
 
-function claudeTab(){app.innerHTML=`<div class="sub">Con tu cartera y el escáner como contexto</div><h1>Claude</h1><div class="card pad"><p style="margin:0" class="muted">${S.ctx?`Verificación de <b>${esc(S.ctx)}</b> lista para lanzarse. `:''}El chat con análisis completo (noticias, banderas de riesgo, lectura de capturas de TradingView y bitácora de veredictos) se conecta en la Fase 3, con tu llave de Anthropic API guardada solo como secreto de servidor.</p></div>`}
+// ── Claude: chat y verificación (la llave de Anthropic vive solo en la función de Supabase) ──
+const FN=CFG.SUPABASE_URL+'/functions/v1/claude-chat';
+const CL={estado:null,msgs:[],cargado:false,espera:null,poll:null,err:null,draft:''};
+const clDesde=()=>{try{return localStorage.getItem('clDesde')||null}catch(e){return null}};
+async function clFn(body){const r=await fetch(FN,{method:'POST',headers:{'content-type':'application/json','x-sm-key':KEY,apikey:CFG.SUPABASE_ANON_KEY},body:JSON.stringify(body)});let j={};try{j=await r.json()}catch(e){}return{...j,status:r.status}}
+async function clEstado(){try{const r=await clFn({accion:'estado'});CL.estado=r.status===200?r:{ok:false,status:r.status}}catch(e){CL.estado={ok:false,red:true}}}
+async function clCargar(){let q=sb.from('sm_chat').select('*').order('creado_en',{ascending:false}).limit(30);const d=clDesde();if(d)q=q.gte('creado_en',d);const r=await q;CL.msgs=(r.data||[]).reverse();CL.cargado=true;
+ const p=CL.msgs.filter(m=>m.rol==='assistant'&&m.contexto&&m.contexto.estado==='pensando'&&Date.now()-new Date(m.creado_en)<18e4).pop();if(p)clVigilar(p.id)}
+function clVigilar(id){CL.espera=id;clearInterval(CL.poll);const t0=Date.now();
+ CL.poll=setInterval(async()=>{let fila=null;try{const r=await sb.from('sm_chat').select('*').eq('id',id);fila=r.data&&r.data[0]}catch(e){}
+  const vencio=Date.now()-t0>18e4;
+  if(fila&&fila.contexto&&fila.contexto.estado!=='pensando'||vencio){clearInterval(CL.poll);CL.espera=null;
+   const i=CL.msgs.findIndex(m=>m.id===id);const nueva=fila&&fila.contexto&&fila.contexto.estado!=='pensando'?fila:{id,rol:'assistant',contenido:'',creado_en:new Date().toISOString(),contexto:{estado:'error',detalle:'Sin respuesta después de 3 minutos. Intenta de nuevo.'}};
+   if(i>=0)CL.msgs[i]=nueva;else CL.msgs.push(nueva);pintarChat()}},3000)}
+async function clEnviar(texto,modo,ticker){texto=(texto||'').trim();if(CL.espera||!texto)return;CL.err=null;
+ CL.msgs.push({rol:'user',contenido:texto,creado_en:new Date().toISOString(),contexto:{}});const tmp={rol:'assistant',contenido:'',creado_en:new Date().toISOString(),contexto:{estado:'pensando'}};CL.msgs.push(tmp);CL.espera='tmp';pintarChat();
+ let r;try{r=await clFn({mensaje:texto,modo:modo||'chat',ticker:ticker||null,desde:clDesde()})}catch(e){r={status:0}}
+ if(r.status!==202){CL.msgs.pop();CL.msgs.pop();CL.espera=null;
+  CL.err=r.status===503?null:r.status===429?(r.detalle||'Llegaste al tope diario de respuestas.'):r.status===401?'La clave privada de este dispositivo no coincide con la del servidor. Abre de nuevo tu enlace privado.':'No pude contactar al servicio de Claude. Revisa tu conexión e intenta de nuevo.';
+  if(r.status===503)CL.estado={ok:true,llave:false};CL.draft=texto;if(S.tab==='claude')claudeTab();return}
+ tmp.id=r.id;CL.draft='';const ci=$('#cin');if(ci){ci.value='';ci.style.height='auto'}clVigilar(r.id)}
+const md=s=>esc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/^#{1,3}\s*(.+)$/gm,'<b>$1</b>').replace(/^[-*]\s+/gm,'• ').replace(/\n/g,'<br>');
+const VERD={ENTRAR:['Entrar','ok'],ENTRAR_REDUCIDO:['Entrar reducido','warn'],ESPERAR:['Esperar','warn'],DESCARTAR:['Descartar','bad']};
+const TEMA={dilucion:'Dilución',litigio:'Litigio',guia_earnings:'Guía/earnings',insiders:'Insiders',valuacion:'Valuación',sector:'Sector',extension:'Extensión'};
+function burbuja(m){if(m.rol==='user')return `<div class="bub u">${esc(m.contenido)}</div>`;const c=m.contexto||{};
+ if(c.estado==='pensando'){if(Date.now()-new Date(m.creado_en)>18e4&&!m._tmp)return `<div class="bub a err">Esta respuesta no llegó. Intenta de nuevo.</div>`;return `<div class="bub a"><span class="dots"><i></i><i></i><i></i></span><span class="muted"> Investigando… si busca noticias puede tardar 1–2 min</span></div>`}
+ if(c.estado==='error')return `<div class="bub a err">${esc(c.detalle||'Algo falló. Intenta de nuevo.')}</div>`;
+ const v=c.veredicto&&VERD[c.veredicto]?`<div style="margin-bottom:8px"><span class="pill ${VERD[c.veredicto][1]}" style="margin:0;font-size:13px;padding:3px 10px">${VERD[c.veredicto][0]}</span>${(c.banderas||[]).map(b=>`<span class="pill ${b.color==='rojo'?'bad':b.color==='amarillo'?'warn':'ok'}" title="${esc(b.nota||'')}">${esc(TEMA[b.tema]||b.tema)}</span>`).join('')}</div>`:'';
+ const src=(c.fuentes||[]).filter(f=>/^https?:\/\//.test(f.url)).map(f=>{let h=f.url;try{h=new URL(f.url).hostname.replace(/^www\./,'')}catch(e){}return `<a class="src" href="${esc(f.url)}" target="_blank" rel="noopener noreferrer" title="${esc(f.titulo||'')}">${esc(h)}</a>`}).join('');
+ const meta=c.costo_usd!=null?`<div class="meta">${esc((c.modelo||'').replace('claude-',''))}${c.busquedas?` · ${c.busquedas} búsquedas`:''} · ≈ $${Number(c.costo_usd).toFixed(3)}</div>`:'';
+ return `<div class="bub a">${v}${md(m.contenido)}${src?`<div>${src}</div>`:''}${meta}</div>`}
+function pintarChat(){const el=$('#msgs');if(!el)return;el.innerHTML=CL.msgs.length?CL.msgs.map(burbuja).join(''):'';const sd=$('#csd');if(sd)sd.disabled=!!CL.espera||!(CL.estado&&CL.estado.ok&&CL.estado.llave);window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'})}
+function claudeTab(){const e=CL.estado;
+ const listo=e&&e.ok&&e.llave;
+ let est='';
+ if(!e)est=`<div class="card pad"><p class="muted" style="margin:0">Conectando con Claude…</p></div>`;
+ else if(!e.ok)est=`<div class="card pad"><p class="muted" style="margin:0">${e.status===404?'El servicio de Claude todavía no está instalado en Supabase.':e.status===401?'La clave privada de este dispositivo no coincide con la del servidor. Abre de nuevo tu enlace privado.':'No pude contactar al servicio de Claude. Revisa tu conexión.'}</p><button class="btn sec" id="cre">Revisar de nuevo</button></div>`;
+ else if(!e.llave)est=`<div class="card pad"><div class="t">Falta un paso (una sola vez)</div><p class="muted" style="margin:6px 0 0">Claude necesita tu llave de Anthropic API. Se guarda solo en el servidor; esta app nunca la ve.</p><ol class="steps"><li>Crea la llave en <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com → API keys</a> y cópiala.</li><li>Si es tu primera vez, agrega saldo en <a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener">Billing</a> (con $10 alcanza para semanas).</li><li>Pégala en <a href="https://supabase.com/dashboard/project/xbmdgrxceuttvbactugw/functions/secrets" target="_blank" rel="noopener">Supabase → Edge Functions → Secrets</a>, con el nombre <b>ANTHROPIC_API_KEY</b>.</li></ol><button class="btn" id="cre">Ya la pegué — revisar</button></div>`;
+ else est=`<div class="muted" style="margin:6px 4px 0">Conectado · ${esc((e.modelo||'').replace('claude-',''))}</div>`;
+ const ban=S.ctx&&listo?`<div class="card pad"><div class="t">Verificar ${esc(S.ctx)}</div><p class="muted" style="margin:4px 0 0">Estructura del escáner + búsqueda de noticias, dilución, earnings, insiders y sector. Termina con veredicto y niveles.</p><button class="btn" id="cvr">Lanzar verificación</button></div>`:'';
+ const sug=listo&&!CL.msgs.length&&!S.ctx?`<div class="chips">${['Verifica las señales núcleo de hoy','¿Cómo está el mercado hoy?','¿Cómo van mis robots?'].map(x=>`<button data-q="${esc(x)}">${esc(x)}</button>`).join('')}</div>`:'';
+ const nuevo=CL.msgs.length?`<button class="linkbtn" id="cnu">Nueva conversación</button>`:'';
+ app.innerHTML=`<div class="sub">Con tu cartera y el escáner como contexto</div><h1>Claude</h1>${est}${ban}${sug}${CL.err?`<div class="aviso">${esc(CL.err)}</div>`:''}<div id="msgs"></div>${nuevo}<div style="height:76px"></div>
+ <div class="composer"><textarea id="cin" rows="1" placeholder="${listo?'Pregunta lo que quieras…':'Disponible cuando Claude esté conectado'}" ${listo?'':'disabled'}></textarea><button id="csd" aria-label="Enviar"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div>`;
+ const cin=$('#cin');cin.value=CL.draft||'';const ajusta=()=>{cin.style.height='auto';cin.style.height=Math.min(cin.scrollHeight,120)+'px'};ajusta();
+ cin.oninput=()=>{CL.draft=cin.value;ajusta()};cin.onkeydown=ev=>{if(ev.key==='Enter'&&(ev.ctrlKey||ev.metaKey)){ev.preventDefault();$('#csd').click()}};
+ $('#csd').onclick=()=>{clEnviar(cin.value,'chat',null)};
+ const cre=$('#cre');if(cre)cre.onclick=async()=>{CL.estado=null;claudeTab();await clEstado();if(S.tab==='claude')claudeTab()};
+ const cvr=$('#cvr');if(cvr)cvr.onclick=()=>{const tk=S.ctx;S.ctx=null;claudeTab();clEnviar(`Verifica ${tk} con el protocolo completo y dame el veredicto con niveles.`,'verificar',tk)};
+ app.querySelectorAll('.chips button').forEach(b=>b.onclick=()=>clEnviar(b.dataset.q,'chat',null));
+ const cnu=$('#cnu');if(cnu)cnu.onclick=()=>{try{localStorage.setItem('clDesde',new Date().toISOString())}catch(x){}CL.msgs=[];CL.err=null;claudeTab()};
+ pintarChat();
+ if(!e)clEstado().then(()=>{if(S.tab==='claude')claudeTab()});
+ if(!CL.cargado)clCargar().then(()=>{if(S.tab==='claude')pintarChat()}).catch(()=>{CL.cargado=true})}
 
 function render(){nav();if(S.det&&S.scan)return detalle();({hoy,cartera,lab,claude:claudeTab})[S.tab]()}
 const cargarScripts=()=>['esquema.js','lab.js'].reduce((p,f)=>p.then(()=>new Promise((ok,no)=>{const e=document.createElement('script');e.src=f;e.onload=ok;e.onerror=()=>no(new Error('No cargó '+f));document.head.appendChild(e)})),Promise.resolve());
