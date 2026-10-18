@@ -68,7 +68,20 @@ async function load(){
   sb.from('sm_robots').select('*').order('creado_en'),
   sb.from('sm_robot_operaciones').select('robot_id,estado,resultado_r'),
   sb.from('sm_velas').select('ticker,barras')]);
- S.err=a.error?a.error.message:null;S.scan=a.data?.[0]||null;S.pos=b.data||[];S.robots=c.data||[];S.ops=d.data||[];S.velas={};(e.data||[]).forEach(v=>S.velas[v.ticker]=v.barras);try{await cargarLab()}catch(x){}}
+ S.err=a.error?a.error.message:null;S.scan=a.data?.[0]||null;S.pos=b.data||[];S.robots=c.data||[];S.ops=d.data||[];S.velas={};(e.data||[]).forEach(v=>S.velas[v.ticker]=v.barras);try{await cargarLab()}catch(x){}try{await cargarCmd()}catch(x){}}
+async function cargarCmd(){const r=await sb.from('sm_comandos').select('*').order('creado_en',{ascending:false}).limit(1);S.cmd=r.data?.[0]||null}
+function cmdBox(){const c=S.cmd,min=c?(Date.now()-new Date(c.creado_en))/6e4:1e9;let msg='',busy=false;
+ if(c&&c.estado==='pendiente'&&min<60){busy=true;msg='Pedido enviado. GitHub lo revisa cada 15 min en horario de mercado (L–V, 6:00–14:00 Tijuana); fuera de ese horario se atiende al abrir el siguiente día.'}
+ else if(c&&c.estado==='en_proceso'&&min<30){busy=true;msg='Escaneando ahora… tarda cerca de 1 minuto.'}
+ else if(c&&c.estado==='listo'&&min<15)msg='Escaneo listo — datos actualizados.';
+ else if(c&&c.estado==='error'&&min<60)msg='El último pedido falló'+(c.resultado&&c.resultado.detalle?': '+esc(c.resultado.detalle):'')+'. Revisa Laboratorio → Salud.';
+ return `<div class="card pad" style="margin-top:12px"><button class="btn sec" id="esc" style="margin-top:0"${busy?' disabled':''}>${busy?'Escaneo en curso…':'Escanear ahora'}</button>${msg?`<p class="muted" style="margin:10px 2px 0;font-size:13px">${msg}</p>`:''}</div>`}
+async function pedirEscaneo(){const b=$('#esc');if(b){b.disabled=true;b.textContent='Enviando…'}
+ const r=await sb.from('sm_comandos').insert({tipo:'escanear'});if(r.error){alert('No se pudo enviar el pedido: '+r.error.message);await cargarCmd();render();return}
+ await cargarCmd();render();vigilarCmd()}
+let _vig=null;function vigilarCmd(){clearInterval(_vig);let n=0;_vig=setInterval(async()=>{n++;try{await cargarCmd()}catch(x){}const c=S.cmd;
+ if(c&&(c.estado==='listo'||c.estado==='error')){clearInterval(_vig);_vig=null;if(c.estado==='listo')await load();if(S.tab==='hoy'&&!S.det)render();return}
+ if(n>240){clearInterval(_vig);_vig=null;return}if(S.tab==='hoy'&&!S.det)render()},15000)}
 
 function sizing(r){const rk=RISK[r.clase];if(!rk)return null;const riskUsd=CAP*rk,dist=r.price-r.stop;if(dist<=0)return null;
  let sh=Math.floor(riskUsd/dist);sh=Math.min(sh,Math.floor(MAXPOS/r.price));return{sh,val:sh*r.price,riesgo:sh*dist}}
@@ -80,12 +93,13 @@ function hoy(){const sc=S.scan;if(!sc){app.innerHTML=`<div class="sub">Sin datos
  const blk=(tit,arr,vacio)=>`<h2>${tit}</h2><div class="card">${arr.length?arr.map(it).join(''):`<div class="pad muted">${vacio}</div>`}</div>`;
  const it=r=>{const c=CLASE[r.clase]||['','',''];return`<div class="item" data-tk="${r.ticker}"><div class="grow"><div class="t">${r.ticker}<span class="pill ${c[1]}">${c[0]}</span>${r.ya_en_otra_cuenta?'<span class="pill warn">Ya en otra cuenta</span>':''}</div><div class="s">Tier ${r.tier} · score ${Math.round(r.total_score)} · ${esc(r.sector||'')}</div></div><div class="r"><div class="t">${money(r.price)}</div><div class="s">Stop ${money(r.stop)}</div></div></div>`};
  app.innerHTML=`<div class="sub">${fecha} · hora de Tijuana · v${esc(sc.version)}</div><h1>Hoy</h1>${saludPill()}
+ ${cmdBox()}
  ${sc.mercado_ok?'':`<div class="aviso"><b>Mercado inactivo (aviso).</b> ${esc(sc.mercado_txt||'')}. No es un veto: el backtest no respalda esperar, pero entra con la disciplina de siempre.</div>`}
  ${blk('Núcleo · 2% de riesgo',g('NUCLEO'),'Hoy no hay señales núcleo.')}
  ${blk('Calificadas · 1% de riesgo',g('CALIFICADA'),'Sin calificadas hoy.')}
  ${blk('Solo robot (simulado)',g('ROBOT'),'Nada para el laboratorio hoy.')}
  ${blk('Vigilancia',sc.payload.results.filter(r=>r.tier===4).slice(0,8),'Sin candidatos cercanos.')}`;
- app.querySelectorAll('.item[data-tk]').forEach(e=>e.onclick=()=>{S.det=e.dataset.tk;render()});const sp=$('#sp');if(sp)sp.onclick=()=>{S.tab='lab';L.vista='salud';render()}}
+ app.querySelectorAll('.item[data-tk]').forEach(e=>e.onclick=()=>{S.det=e.dataset.tk;render()});const sp=$('#sp');if(sp)sp.onclick=()=>{S.tab='lab';L.vista='salud';render()};const ec=$('#esc');if(ec)ec.onclick=pedirEscaneo;if(!_vig&&S.cmd&&['pendiente','en_proceso'].includes(S.cmd.estado)&&(Date.now()-new Date(S.cmd.creado_en))<36e5)vigilarCmd()}
 
 function velas(canvas,bars,r){const dpr=devicePixelRatio||1,W=canvas.clientWidth,H=canvas.clientHeight;canvas.width=W*dpr;canvas.height=H*dpr;const x=canvas.getContext('2d');x.scale(dpr,dpr);
  const b=bars.slice(-90);const hi=Math.max(...b.map(v=>v.h),r.tp2||0),lo=Math.min(...b.map(v=>v.l),r.stop||1e9);const pad=(hi-lo)*.05,mx=hi+pad,mn=lo-pad;
