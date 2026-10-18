@@ -42,6 +42,7 @@ canvas{width:100%;height:240px;display:block}
 .dots i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--tx2);margin-right:4px;animation:pp 1.2s infinite ease-in-out}.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
 @keyframes pp{0%,80%,100%{opacity:.25}40%{opacity:1}}
 .composer{position:fixed;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom));max-width:520px;margin:0 auto;display:flex;gap:8px;align-items:flex-end;padding:8px 12px;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(20px)}
+.chk{display:flex;gap:10px;align-items:center;font-size:15px;margin:4px 0 10px}.chk input{width:22px;height:22px;min-height:0;margin:0;flex:none}.two{display:flex;gap:8px}.two input{flex:1;min-width:0}.pp{background:var(--chip);padding:12px 16px 16px}
 .composer textarea{flex:1;min-height:44px;max-height:120px;border:1px solid var(--line);border-radius:22px;background:var(--card);color:var(--tx);padding:11px 16px;font-size:16px;font-family:inherit;resize:none;margin:0}
 .composer button{width:44px;height:44px;border-radius:50%;border:0;background:var(--ac);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none}.composer button:disabled{opacity:.4}
 .composer svg{width:22px;height:22px;fill:none;stroke:#fff;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
@@ -83,7 +84,7 @@ async function load(){
   sb.from('sm_robots').select('*').order('creado_en'),
   sb.from('sm_robot_operaciones').select('robot_id,estado,resultado_r'),
   sb.from('sm_velas').select('ticker,barras')]);
- S.err=a.error?a.error.message:null;S.scan=a.data?.[0]||null;S.pos=b.data||[];S.robots=c.data||[];S.ops=d.data||[];S.velas={};(e.data||[]).forEach(v=>S.velas[v.ticker]=v.barras);try{await cargarLab()}catch(x){}try{await cargarCmd()}catch(x){}try{await cargarPush()}catch(x){}}
+ S.err=a.error?a.error.message:null;S.scan=a.data?.[0]||null;S.pos=b.data||[];S.robots=c.data||[];S.ops=d.data||[];S.velas={};(e.data||[]).forEach(v=>S.velas[v.ticker]=v.barras);try{await cargarLab()}catch(x){}try{await cargarCmd()}catch(x){}try{await cargarDec()}catch(x){}try{await cargarPush()}catch(x){}}
 async function cargarCmd(){const r=await sb.from('sm_comandos').select('*').order('creado_en',{ascending:false}).limit(1);S.cmd=r.data?.[0]||null}
 const PUSH_OK=()=>('serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window);
 S.push={est:'?',ult:null,msg:''};
@@ -163,17 +164,48 @@ function detalle(){const r=S.scan.payload.results.find(x=>x.ticker===S.det);cons
  <div class="row"><span class="k">Rango 52 sem. · RS</span><span class="v">${Math.round(r.pos52)}% · ${r.rs_rating}</span></div>
  <div class="row"><span class="k">Escenario histórico</span><span class="v">${esc(r.escenario_label||'—')}</span></div></div>
  <p class="muted" style="padding:0 4px">Tamaño sobre $10,000, tope $3,000 por posición. Antes de entrar: verificación con Claude (pestaña Claude). El stop debe ser una orden real en el broker.</p>
+ <div class="card pad"><div class="t">Mi decisión</div>${(S.dec.filter(d=>(d.contexto||{}).ticker===r.ticker).slice(0,3).map(d=>{const k=DEC[(d.contexto||{}).decision]||['',''];return`<div class="s" style="margin-top:8px"><span class="pill ${k[1]}" style="margin:0 6px 0 0">${k[0]}</span>${esc(d.fecha)}${d.cuerpo_md?' · '+esc(d.cuerpo_md):''}</div>`}).join(''))}
+ <div class="seg" id="dsg">${['ENTRE','ESPERE','DESCARTE'].map(k=>`<button data-d="${k}">${DEC[k][0]}</button>`).join('')}</div><div id="dform"></div></div>
  <button class="btn" id="vr">Verificar con Claude</button>`;
+ $('#dsg').querySelectorAll('button').forEach(b=>b.onclick=()=>{const cod=b.dataset.d;$('#dsg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+  $('#dform').innerHTML=`<input id="dm" placeholder="¿Por qué? (una línea)"><button class="btn" id="dg">Guardar decisión</button>`;
+  $('#dg').onclick=async()=>{const ok=await guardarDec(cod,r.ticker,$('#dm').value.trim(),{precio:r.price,clase:r.clase,score:r.total_score,tier:r.tier,escaner:S.scan.scan_time});if(!ok){$('#dform').insertAdjacentHTML('beforeend','<p class="muted">No se pudo guardar. Intenta de nuevo.</p>');return}render()}});
  $('#bk').onclick=()=>{S.det=null;render()};$('#vr').onclick=()=>{S.tab='claude';S.ctx=r.ticker;S.det=null;render()};if(bars)velas($('#cv'),bars,r)}
 
-function cartera(){const f=S.filtro,lista=S.pos.filter(p=>f==='Todas'||p.cuenta===f);const last={};(S.scan?.payload.results||[]).forEach(r=>last[r.ticker]=r.price);
+S.sec='pos';S.pe=null;S.cc=false;S.dec=[];
+async function cargarDec(){const r=await sb.from('sm_decisiones').select('*').eq('tipo','operacion').order('creado_en',{ascending:false}).limit(100);S.dec=r.data||[]}
+const hoyTJ=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Tijuana'}).format(new Date());
+const DEC={ENTRE:['Entré','ok'],ESPERE:['Esperé','warn'],DESCARTE:['Descarté','bad'],CERRE:['Cerré','ac']};
+async function guardarDec(cod,ticker,motivo,extra){const r=await sb.from('sm_decisiones').insert({fecha:hoyTJ(),tipo:'operacion',titulo:DEC[cod][0]+' · '+ticker,cuerpo_md:motivo||null,contexto:Object.assign({ticker,decision:cod},extra||{})});if(r&&r.error)return false;try{await cargarDec()}catch(x){}return true}
+const segSec=()=>`<div class="seg">${[['pos','Posiciones'],['diario','Diario']].map(([k,l])=>`<button class="${S.sec===k?'on':''}" data-s="${k}">${l}</button>`).join('')}</div>`;
+const bindSec=()=>app.querySelectorAll('.seg button[data-s]').forEach(b=>b.onclick=()=>{S.sec=b.dataset.s;S.pe=null;S.cc=false;render()});
+function diario(){const l=S.dec;
+ app.innerHTML=`<div class="sub">Por qué entraste, esperaste o descartaste</div><h1>Diario</h1>${segSec()}<div class="card">${l.length?l.map(d=>{const c=d.contexto||{},k=DEC[c.decision]||['',''];return`<div class="item" style="cursor:default"><div class="grow"><div class="t">${esc(c.ticker||d.titulo)}${k[0]?`<span class="pill ${k[1]}">${k[0]}</span>`:''}</div><div class="s">${esc(d.cuerpo_md||'Sin nota')}</div></div><div class="r"><div class="s">${esc(d.fecha)}</div>${c.precio?`<div class="s">${money(c.precio)}</div>`:''}</div></div>`}).join(''):'<div class="pad muted">Aún no hay decisiones. En el detalle de cada señal marca qué hiciste y por qué: queda aquí y Claude lo usa para no repetir errores.</div>'}</div>`;bindSec()}
+function posPanel(p){return`<div class="pp"><label class="chk"><input type="checkbox" id="px-sr" ${p.stop_real?'checked':''}> El stop ya es una orden real en el broker</label>
+ <div class="two"><input id="px-s" type="number" step="any" placeholder="Stop" value="${p.stop??''}"><input id="px-t" type="number" step="any" placeholder="Take profit" value="${p.tp??''}"></div>
+ <button class="btn sec" id="px-g">Guardar cambios</button>
+ <input id="px-x" type="number" step="any" placeholder="Precio de salida (para cerrar)"><input id="px-n" placeholder="Nota: por qué cierras (opcional)">
+ <button class="btn" id="px-c">${S.cc?'Confirmar cierre':'Cerrar posición'}</button></div>`}
+function cartera(){if(S.sec==='diario')return diario();
+ const f=S.filtro,lista=S.pos.filter(p=>f==='Todas'||p.cuenta===f);const last={};(S.scan?.payload.results||[]).forEach(r=>last[r.ticker]=r.price);
  const grupo=c=>{const l=lista.filter(p=>p.cuenta===c);if(!l.length)return'';return`<h2>${c==='IBKR'?'Interactive Brokers':'eToro'}</h2><div class="card">${l.map(p=>{const px=last[p.ticker],pl=px&&p.entrada&&p.acciones&&p.tipo!=='apalancada'?(px-p.entrada)*p.acciones:null,pc=px&&p.entrada?(px/p.entrada-1)*100:null;
-  return`<div class="item"><div class="grow"><div class="t">${esc(p.ticker)}<span class="pill ${p.tipo==='apalancada'?'warn':''}">${p.tipo==='apalancada'?'Apalancada':'Acciones'}</span>${px&&p.stop&&px<=p.stop?'<span class="pill bad">Bajo el stop</span>':''}</div><div class="s">${p.acciones??'—'} u. · Entrada ${money(p.entrada)}</div><div class="s">Stop ${money(p.stop)} · TP ${money(p.tp)}</div></div><div class="r"><div class="t ${pl>=0?'up':'dn'}">${pl==null?'—':(pl>=0?'+':'')+money(pl)}</div><div class="s ${pc>=0?'up':'dn'}">${pc==null?'':(pc>=0?'+':'')+pc.toFixed(1)+'%'}</div></div></div>`}).join('')}</div>`};
- app.innerHTML=`<div class="sub">Precios del último escaneo</div><h1>Cartera</h1><div class="seg">${['Todas','IBKR','eToro'].map(x=>`<button class="${f===x?'on':''}" data-f="${x}">${x}</button>`).join('')}</div>${grupo('IBKR')||''}${grupo('eToro')||''}${lista.length?'':'<p class="muted">Sin posiciones registradas. Se cargan desde una captura (Claude la lee y las registra) — Fase 3.</p>'}
+  return`<div class="item" data-pid="${p.id}"><div class="grow"><div class="t">${esc(p.ticker)}<span class="pill ${p.tipo==='apalancada'?'warn':''}">${p.tipo==='apalancada'?'Apalancada':'Acciones'}</span>${px&&p.stop&&px<=p.stop?'<span class="pill bad">Bajo el stop</span>':''}${p.stop_real===true?'':'<span class="pill warn">Sin stop real</span>'}</div><div class="s">${p.acciones??'—'} u. · Entrada ${money(p.entrada)}</div><div class="s">Stop ${money(p.stop)} · TP ${money(p.tp)}</div></div><div class="r"><div class="t ${pl>=0?'up':'dn'}">${pl==null?'—':(pl>=0?'+':'')+money(pl)}</div><div class="s ${pc>=0?'up':'dn'}">${pc==null?'':(pc>=0?'+':'')+pc.toFixed(1)+'%'}</div></div></div>${S.pe===p.id?posPanel(p):''}`}).join('')}</div>`};
+ app.innerHTML=`<div class="sub">Precios del último escaneo</div><h1>Cartera</h1>${segSec()}<div class="seg">${['Todas','IBKR','eToro'].map(x=>`<button class="${f===x?'on':''}" data-f="${x}">${x}</button>`).join('')}</div>${grupo('IBKR')||''}${grupo('eToro')||''}${lista.length?'<p class="muted" style="padding:0 4px">Toca una posición para marcar si su stop ya es una orden real, editarla o cerrarla.</p>':'<p class="muted">Sin posiciones registradas. Se cargan desde una captura (Claude la lee y las registra) o con el botón de abajo.</p>'}
  <button class="btn sec" id="add">Registrar posición</button>`;
- app.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{S.filtro=b.dataset.f;render()});
- $('#add').onclick=()=>{app.insertAdjacentHTML('beforeend',`<div class="card pad" style="margin-top:12px"><select id="fc"><option>IBKR</option><option>eToro</option></select><select id="ft"><option value="acciones">Acciones</option><option value="apalancada">Apalancada</option></select><input id="fk" placeholder="Ticker"><input id="fa" type="number" step="any" placeholder="Acciones / unidades"><input id="fe" type="number" step="any" placeholder="Entrada"><input id="fs" type="number" step="any" placeholder="Stop"><input id="fp" type="number" step="any" placeholder="Take profit"><button class="btn" id="sv">Guardar</button></div>`);
-  $('#sv').onclick=async()=>{const n=id=>$(id).value?Number($(id).value):null;await sb.from('sm_posiciones').insert({cuenta:$('#fc').value,tipo:$('#ft').value,ticker:$('#fk').value.toUpperCase().trim(),acciones:n('#fa'),entrada:n('#fe'),stop:n('#fs'),tp:n('#fp'),abierta_en:new Date().toISOString().slice(0,10)});await load();render()}}}
+ bindSec();
+ app.querySelectorAll('.seg button[data-f]').forEach(b=>b.onclick=()=>{S.filtro=b.dataset.f;render()});
+ app.querySelectorAll('.item[data-pid]').forEach(e=>e.onclick=()=>{S.pe=S.pe===e.dataset.pid?null:e.dataset.pid;S.cc=false;render()});
+ const p=S.pos.find(x=>x.id===S.pe);
+ if(p){const n=id=>$(id).value===''?null:Number($(id).value);
+  $('#px-g').onclick=async()=>{const r=await sb.from('sm_posiciones').update({stop:n('#px-s'),tp:n('#px-t'),stop_real:$('#px-sr').checked}).eq('id',p.id);if(r&&r.error){alert('No se pudo guardar: '+r.error.message);return}await load();render()};
+  $('#px-c').onclick=async()=>{const sal=n('#px-x');if(sal==null||sal<=0){$('#px-x').focus();$('#px-x').style.borderColor='var(--bad,#d33)';return}
+   if(!S.cc){S.cc=true;$('#px-c').textContent='Confirmar cierre';return}
+   const pnl=p.tipo!=='apalancada'&&p.entrada&&p.acciones?Math.round((sal-p.entrada)*p.acciones*100)/100:null;const nota=$('#px-n').value.trim()||null;
+   const r=await sb.from('sm_posiciones').update({estado:'cerrada',cerrada_en:hoyTJ(),salida:sal,pnl_usd:pnl,notas:nota}).eq('id',p.id);if(r&&r.error){alert('No se pudo cerrar: '+r.error.message);return}
+   await guardarDec('CERRE',p.ticker,(nota?nota+' · ':'')+'Salida '+money(sal)+(pnl==null?'':' · P&L '+(pnl>=0?'+':'')+money(pnl)),{cuenta:p.cuenta,entrada:p.entrada,salida:sal,pnl_usd:pnl});
+   S.pe=null;S.cc=false;await load();render()}}
+ $('#add').onclick=()=>{app.insertAdjacentHTML('beforeend',`<div class="card pad" style="margin-top:12px"><select id="fc"><option>IBKR</option><option>eToro</option></select><select id="ft"><option value="acciones">Acciones</option><option value="apalancada">Apalancada</option></select><input id="fk" placeholder="Ticker"><input id="fa" type="number" step="any" placeholder="Acciones / unidades"><input id="fe" type="number" step="any" placeholder="Entrada"><input id="fs" type="number" step="any" placeholder="Stop"><input id="fp" type="number" step="any" placeholder="Take profit"><label class="chk" style="margin-top:12px"><input type="checkbox" id="fr"> El stop ya es una orden real en el broker</label><button class="btn" id="sv">Guardar</button></div>`);
+  $('#sv').onclick=async()=>{const n=id=>$(id).value?Number($(id).value):null;const tk=$('#fk').value.toUpperCase().trim();if(!tk){$('#fk').focus();return}await sb.from('sm_posiciones').insert({cuenta:$('#fc').value,tipo:$('#ft').value,ticker:tk,acciones:n('#fa'),entrada:n('#fe'),stop:n('#fs'),tp:n('#fp'),stop_real:$('#fr').checked,abierta_en:hoyTJ()});await load();render()}}}
 
 // ── Claude: chat y verificación (la llave de Anthropic vive solo en la función de Supabase) ──
 const FN=CFG.SUPABASE_URL+'/functions/v1/claude-chat';
