@@ -112,17 +112,27 @@ async function activarPush(){const b=$('#pa');if(b){b.disabled=true;b.textConten
 async function desactivarPush(){try{const reg=await listo(navigator.serviceWorker.ready,3000);const sub=await reg.pushManager.getSubscription();if(sub){await sb.from('sm_push_subs').delete().eq('endpoint',sub.endpoint);await sub.unsubscribe()}}catch(e){}S.push.est='inactivo';render()}
 async function pruebaPush(){const r=await sb.from('sm_comandos').insert({tipo:'probar_aviso'});if(r.error){alert('No se pudo pedir la prueba: '+r.error.message);return}S.push.msg='Prueba pedida: llega cuando GitHub la revise (hasta 15 min en horario de mercado).';render()}
 function cmdBox(){const c=S.cmd,min=c?(Date.now()-new Date(c.creado_en))/6e4:1e9;let msg='',busy=false;
- if(c&&c.estado==='pendiente'&&min<60){busy=true;msg='Pedido enviado. GitHub lo revisa cada 15 min en horario de mercado (L–V, 6:00–14:00 Tijuana); fuera de ese horario se atiende al abrir el siguiente día.'}
- else if(c&&c.estado==='en_proceso'&&min<30){busy=true;msg='Escaneando ahora… tarda cerca de 1 minuto.'}
+ if(c&&c.estado==='pendiente'&&min<60){busy=true;msg='Pedido en cola: el disparador directo no lo tomó. GitHub lo revisa cada 15 min en horario de mercado (L–V, 6:00–14:00 Tijuana).'}
+ else if(c&&c.estado==='en_proceso'&&min<30){busy=true;const seg=Math.max(0,Math.round((Date.now()-new Date(c.tomado_en||c.creado_en))/1e3));
+  msg='Escaneando ahora… lleva '+(seg<90?seg+' s':Math.round(seg/60)+' min')+' (normalmente tarda de 1 a 2 min).'+(seg>240?' Está tardando más de lo normal: si en unos minutos no termina, se marcará como error y podrás reintentar.':'')}
  else if(c&&c.estado==='listo'&&min<15)msg='Escaneo listo — datos actualizados.';
- else if(c&&c.estado==='error'&&min<60)msg='El último pedido falló'+(c.resultado&&c.resultado.detalle?': '+esc(c.resultado.detalle):'')+'. Revisa Laboratorio → Salud.';
+ else if(c&&c.estado==='error'&&min<60)msg='El último pedido falló'+(c.resultado&&c.resultado.detalle?': '+esc(c.resultado.detalle):'')+'. Puedes reintentar con el botón.';
+ if(S.escMsg&&!(c&&c.estado==='listo'&&min<15))msg=(msg?msg+'<br>':'')+'<b>'+esc(S.escMsg)+'</b>';
  return `<div class="card pad" style="margin-top:12px"><button class="btn sec" id="esc" style="margin-top:0"${busy?' disabled':''}>${busy?'Escaneo en curso…':'Escanear ahora'}</button>${msg?`<p class="muted" style="margin:10px 2px 0;font-size:13px">${msg}</p>`:''}</div>`}
+const FNE=CFG.SUPABASE_URL+'/functions/v1/escanear';
+async function escFn(body){const r=await fetch(FNE,{method:'POST',headers:{'content-type':'application/json','x-sm-key':KEY,apikey:CFG.SUPABASE_ANON_KEY},body:JSON.stringify(body)});let j={};try{j=await r.json()}catch(e){}return{...j,status:r.status}}
 async function pedirEscaneo(){const b=$('#esc');if(b){b.disabled=true;b.textContent='Enviando…'}
- const r=await sb.from('sm_comandos').insert({tipo:'escanear'});if(r.error){alert('No se pudo enviar el pedido: '+r.error.message);await cargarCmd();render();return}
+ S.escMsg=null;
+ const r=await sb.from('sm_comandos').insert({tipo:'escanear'});
+ if(r.error){S.escMsg='No se pudo enviar el pedido: '+r.error.message;await cargarCmd();render();return}
+ try{const x=await escFn({accion:'ahora'});
+  if(x.status===200&&x.ok){S.escMsg=x.ya_en_curso?'Ya había un escaneo en curso: espera su resultado.':null}
+  else S.escMsg=(x.detalle||('El disparador directo no respondió (código '+x.status+').'))+' Tu pedido quedó en cola: GitHub lo atiende en máximo 15 min.'
+ }catch(e){S.escMsg='Sin conexión con el disparador directo. Tu pedido quedó en cola: GitHub lo atiende en máximo 15 min.'}
  await cargarCmd();render();vigilarCmd()}
 let _vig=null;function vigilarCmd(){clearInterval(_vig);let n=0;_vig=setInterval(async()=>{n++;try{await cargarCmd()}catch(x){}const c=S.cmd;
  if(c&&(c.estado==='listo'||c.estado==='error')){clearInterval(_vig);_vig=null;if(c.estado==='listo')await load();if(S.tab==='hoy'&&!S.det)render();return}
- if(n>240){clearInterval(_vig);_vig=null;return}if(S.tab==='hoy'&&!S.det)render()},15000)}
+ if(n>720){clearInterval(_vig);_vig=null;return}if(S.tab==='hoy'&&!S.det)render()},5000)}
 
 function sizing(r){const rk=RISK[r.clase];if(!rk)return null;const riskUsd=CAP*rk,dist=r.price-r.stop;if(dist<=0)return null;
  let sh=Math.floor(riskUsd/dist);sh=Math.min(sh,Math.floor(MAXPOS/r.price));return{sh,val:sh*r.price,riesgo:sh*dist}}
@@ -131,9 +141,15 @@ const f2=n=>n==null?'—':'$'+Number(n).toFixed(2);
 function textoVerificar(arr){const sc=S.scan;
  const pl=arr.map(r=>{const c=CLASE[r.clase]||['','',''],sz=sizing(r),ext=r.e21?((r.price/r.e21-1)*100).toFixed(1)+'% sobre EMA21':'—';
   return`• ${r.ticker} — ${c[0]} (Tier ${r.tier}, puntaje ${Math.round(r.total_score)}) · ${r.sector||'—'}\n  Entrada ideal ${f2(r.price)} · Stop ${f2(r.stop)} · TP1 ${f2(r.tp1)} · TP2 ${f2(r.tp2)}\n  RS ${r.rs_rating} · rango 52 sem. ${Math.round(r.pos52)}% · extensión ${ext} · earnings: ${r.earn_label||'—'} · escenario: ${r.escenario_label||'—'}${sz?`\n  Tamaño propuesto (${c[2]}): ${sz.sh} acc. ≈ ${f2(sz.val)} · riesgo ${f2(sz.riesgo)}`:''}`}).join('\n');
- return`Verifica con el protocolo completo de SwingMom ${arr.length>1?'estas señales':'esta señal'} del escaneo del ${new Date(sc.creado_en).toLocaleString('es-MX',{timeZone:'America/Tijuana',dateStyle:'short',timeStyle:'short'})} (hora de Tijuana).\nMercado: ${sc.mercado_txt||'—'}\n\n${pl}\n\nQuiero por cada una: veredicto (ENTRAR / ENTRAR REDUCIDO / ESPERAR / DESCARTAR), entrada ideal, no pagar más de, stop, TP1, TP2, acciones y riesgo en dólares, y earnings. Revisa dilución y convertibles, litigios, guía y earnings, insiders, valuación y contexto del sector. Voy a adjuntar la captura del gráfico de TradingView.`}
+ return`Verifica con el protocolo completo de SwingMom ${arr.length>1?'estas señales':'esta señal'} del escaneo del ${new Date(sc.creado_en).toLocaleString('es-MX',{timeZone:'America/Tijuana',dateStyle:'short',timeStyle:'short'})} (hora de Tijuana).\nMercado: ${sc.mercado_txt||'—'}\n\n${pl}\n\nCapturas de TradingView que adjunto (gráfico diario, velas, con EMA 21/50/200 y volumen): 1) cada ticker a 1 año; 2) cada ticker con zoom a los últimos 3 meses (la base actual); 3) el ETF de su sector a 1 año; 4) SPY a 6 meses. Si falta alguna, dímelo antes de dar el veredicto.\n\nInvestiga con el protocolo completo (dilución y convertibles, litigios, guía y earnings, insiders, valuación, contexto del sector y noticias de hoy). Responde por cada ticker con este formato, sin rodeos:\nVEREDICTO: ENTRAR / ENTRAR REDUCIDO / ESPERAR / DESCARTAR\nEntrada ideal · No pagar más de · Stop · TP1 · TP2 · Acciones y riesgo en dólares · Earnings\nBanderas (verde/amarillo/rojo): dilución, litigios, guía, insiders, valuación, sector, extensión\nQué veo en el gráfico:\nQué haría y a qué hora (hora de Tijuana):`}
 async function copiar(txt,btn){let ok=false;try{await navigator.clipboard.writeText(txt);ok=true}catch(e){try{const t=document.createElement('textarea');t.value=txt;t.style.position='fixed';t.style.opacity='0';document.body.appendChild(t);t.select();ok=document.execCommand('copy');t.remove()}catch(x){}}
  const o=btn.textContent;btn.textContent=ok?'Copiado ✓ — pégalo en Claude':'No se pudo copiar';setTimeout(()=>{btn.textContent=o},2500)}
+function faltaBox(sc){const tj=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Tijuana'}));const dow=tj.getDay(),min=tj.getHours()*60+tj.getMinutes();
+ const fscan=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Tijuana'}).format(new Date(sc.creado_en));
+ const c=S.cmd,activo=c&&['pendiente','en_proceso'].includes(c.estado)&&(Date.now()-new Date(c.creado_en))<36e5;
+ if(dow>=1&&dow<=5&&min>=12*60+40&&min<=20*60&&fscan!==hoyTJ()&&!activo)return`<div class="aviso" style="border-color:var(--bad)"><b>Hoy todavía no hay escaneo.</b> Debía llegar a las 12:30. Toca «Escanear ahora» aquí abajo.</div>`;return''}
+function candidata(arr){if(!arr.length)return'';const r=[...arr].sort((a,b)=>b.total_score-a.total_score)[0],sz=sizing(r);
+ return`<h2>Candidata del día · falta verificar</h2><div class="card pad item" data-tk="${r.ticker}" style="display:block"><div class="t">${r.ticker} <span class="muted">· score ${Math.round(r.total_score)}</span></div><div class="s" style="margin-top:6px">Entrada ${money(r.price)} · Stop ${money(r.stop)} · TP1 ${money(r.tp1)} · TP2 ${money(r.tp2)}${sz?` · ${sz.sh} acc. (${money(sz.val)})`:''}</div><div class="s" style="margin-top:6px">El escáner no ve noticias, dilución ni sector: verifica con Claude antes de entrar.</div></div>`}
 function hoy(){const sc=S.scan;if(!sc){app.innerHTML=`<div class="sub">Sin datos todavía</div><h1>Hoy</h1><p class="muted">Aún no hay ningún escaneo en la base. Lanza el workflow en GitHub (Actions → SwingMom scan → Run workflow).</p>`;return}
  const rs=sc.payload.results.filter(r=>r.tier<=5&&!r.ya_en_otra_cuenta||r.tier<=3);
  const g=c=>sc.payload.results.filter(r=>r.tier<=3&&r.clase===c);
@@ -141,10 +157,10 @@ function hoy(){const sc=S.scan;if(!sc){app.innerHTML=`<div class="sub">Sin datos
  const blk=(tit,arr,vacio)=>`<h2>${tit}</h2><div class="card">${arr.length?arr.map(it).join(''):`<div class="pad muted">${vacio}</div>`}</div>`;
  const it=r=>{const c=CLASE[r.clase]||['','',''];return`<div class="item" data-tk="${r.ticker}"><div class="grow"><div class="t">${r.ticker}<span class="pill ${c[1]}">${c[0]}</span>${r.ya_en_otra_cuenta?'<span class="pill warn">Ya en otra cuenta</span>':''}</div><div class="s">Tier ${r.tier} · score ${Math.round(r.total_score)} · ${esc(r.sector||'')}</div></div><div class="r"><div class="t">${money(r.price)}</div><div class="s">Stop ${money(r.stop)}</div></div></div>`};
  app.innerHTML=`<div class="sub">${fecha} · hora de Tijuana · v${esc(sc.version)}</div><h1>Hoy</h1>${saludPill()}
- ${cmdBox()}
+ ${faltaBox(sc)}${cmdBox()}
  ${avisosBox()}
  ${sc.mercado_ok?'':`<div class="aviso"><b>Mercado inactivo (aviso).</b> ${esc(sc.mercado_txt||'')}. No es un veto: el backtest no respalda esperar, pero entra con la disciplina de siempre.</div>`}
- ${blk('Núcleo · 2% de riesgo',g('NUCLEO'),'Hoy no hay señales núcleo.')}
+ ${candidata(g('NUCLEO'))}${blk('Núcleo · 2% de riesgo',g('NUCLEO'),'Hoy no hay señales núcleo.')}
  ${blk('Calificadas · 1% de riesgo',g('CALIFICADA'),'Sin calificadas hoy.')}
  ${g('NUCLEO').length+g('CALIFICADA').length?'<button class="btn sec" id="cpd">Copiar núcleo y calificadas para verificar en Claude</button>':''}
  ${blk('Solo robot (simulado)',g('ROBOT'),'Nada para el laboratorio hoy.')}
@@ -174,9 +190,16 @@ function detalle(){const r=S.scan.payload.results.find(x=>x.ticker===S.det);cons
  <p class="muted" style="padding:0 4px">Tamaño sobre $10,000, tope $3,000 por posición. Antes de entrar: verificación con Claude (pestaña Claude). El stop debe ser una orden real en el broker.</p>
  <div class="card pad"><div class="t">Mi decisión</div>${(S.dec.filter(d=>(d.contexto||{}).ticker===r.ticker).slice(0,3).map(d=>{const k=DEC[(d.contexto||{}).decision]||['',''];return`<div class="s" style="margin-top:8px"><span class="pill ${k[1]}" style="margin:0 6px 0 0">${k[0]}</span>${esc(d.fecha)}${d.cuerpo_md?' · '+esc(d.cuerpo_md):''}</div>`}).join(''))}
  <div class="seg" id="dsg">${['ENTRE','ESPERE','DESCARTE'].map(k=>`<button data-d="${k}">${DEC[k][0]}</button>`).join('')}</div><div id="dform"></div></div>
+ <div class="card pad"><div class="t">Veredicto de Claude (teléfono)</div><p class="muted" style="margin:6px 0 0;font-size:13px">Pega aquí lo que te respondió Claude del teléfono para que la app lo recuerde.</p>
+ <div class="seg" id="vsg">${Object.keys(VERD).map(k=>`<button data-v="${k}">${VERD[k][0]}</button>`).join('')}</div><textarea id="vt" rows="4" placeholder="Pega la respuesta de Claude (resumen y niveles)" style="width:100%;margin-top:8px"></textarea><button class="btn" id="vg">Guardar veredicto</button><div id="vm"></div></div>
  <button class="btn" id="vr">Verificar con Claude</button>
- <button class="btn sec" id="cpv">Copiar para verificar en Claude (teléfono)</button>`;
+ <button class="btn sec" id="cpv">Copiar para verificar en Claude (teléfono)</button>
+ <a class="btn sec" id="tv" href="https://www.tradingview.com/chart/?symbol=${encodeURIComponent(r.ticker)}" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none">Abrir ${r.ticker} en TradingView</a>`;
  $('#cpv').onclick=()=>copiar(textoVerificar([r]),$('#cpv'));
+ let vsel=null;$('#vsg').querySelectorAll('button').forEach(b=>b.onclick=()=>{vsel=b.dataset.v;$('#vsg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b))});
+ $('#vg').onclick=async()=>{const t=$('#vt').value.trim();if(!vsel){$('#vm').innerHTML='<p class="muted">Elige primero el veredicto.</p>';return}if(t.length<10){$('#vm').innerHTML='<p class="muted">Pega el texto de Claude.</p>';return}
+  const x=await sb.from('sm_veredictos').insert({ticker:r.ticker,veredicto:vsel,resumen:t.slice(0,6000),captura_tv:true,modelo:'claude-telefono'});
+  $('#vm').innerHTML=x.error?'<p class="muted">No se pudo guardar. Intenta de nuevo.</p>':'<p class="muted">Guardado ✓ — Claude en la app lo recordará.</p>';if(!x.error)$('#vt').value=''};
  $('#dsg').querySelectorAll('button').forEach(b=>b.onclick=()=>{const cod=b.dataset.d;$('#dsg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
   $('#dform').innerHTML=`<input id="dm" placeholder="¿Por qué? (una línea)"><button class="btn" id="dg">Guardar decisión</button>`;
   $('#dg').onclick=async()=>{const ok=await guardarDec(cod,r.ticker,$('#dm').value.trim(),{precio:r.price,clase:r.clase,score:r.total_score,tier:r.tier,escaner:S.scan.scan_time});if(!ok){$('#dform').insertAdjacentHTML('beforeend','<p class="muted">No se pudo guardar. Intenta de nuevo.</p>');return}render()}});
