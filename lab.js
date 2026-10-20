@@ -45,7 +45,7 @@ const avisoHtml=()=>L.aviso?`<div class="aviso" style="${L.aviso.bad?BAD:''}">${
 
 function lab(){
  if(L.robot)return robotDetalle();if(L.sol)return resultado();
- const head=`<div class="sub">Robots, pruebas de 5 años y salud del sistema</div><h1>Laboratorio</h1>${avisoHtml()}${seg()}`;
+ const head=`<div class="sub">Dinero de PAPEL (simulado) · robots, pruebas de 5 años y salud del sistema</div><h1>Laboratorio</h1>${avisoHtml()}${seg()}`;
  if(L.vista==='probar')return probar(head);if(L.vista==='salud')return salud(head);
  const act=S.robots.filter(r=>r.estado!=='retirado');const k=act.length;
  const filas=act.map(r=>{const a=audDe(r.id),st=a?.stats||{},e=st.r||{},q=st.equity||{};return{r,e,q,cod:a?.codigo,ab:st.abiertas||0}}).sort((x,y)=>(y.q.retorno_pct??-99)-(x.q.retorno_pct??-99));
