@@ -85,7 +85,7 @@ async function load(){
   sb.from('sm_robot_operaciones').select('robot_id,estado,resultado_r'),
   sb.from('sm_velas').select('ticker,barras')]);
  S.err=a.error?a.error.message:null;S.scan=a.data?.[0]||null;S.pos=b.data||[];S.robots=c.data||[];S.ops=d.data||[];S.velas={};(e.data||[]).forEach(v=>S.velas[v.ticker]=v.barras);try{await cargarLab()}catch(x){}try{await cargarCmd()}catch(x){}try{await cargarDec()}catch(x){}try{await cargarVerd()}catch(x){}try{await cargarSen()}catch(x){}try{await cargarCer()}catch(x){}try{await cargarPush()}catch(x){}}
-const APP_VER='2026-10-21.2';S.errs=[];
+const APP_VER='2026-10-21.3';S.errs=[];
 window.addEventListener('error',e=>{S.errs.push((new Date().toISOString().slice(11,19))+' '+String(e.message||e).slice(0,160))});
 window.addEventListener('unhandledrejection',e=>{S.errs.push((new Date().toISOString().slice(11,19))+' promesa: '+String(e.reason&&e.reason.message||e.reason).slice(0,160))});
 function textoFallo(){const sc=S.scan,c=S.cmd,tz='America/Tijuana';
@@ -105,7 +105,7 @@ function comoDecideBox(){return`<details class="card pad" style="margin-top:16px
  <p style="margin:0 0 8px"><b>2. Las separa por clase.</b> Núcleo (puntaje 190 o más): arriesgas 2%. Calificada: arriesgas 1%. El resto solo lo sigue un robot de práctica con dinero simulado.</p>
  <p style="margin:0 0 8px"><b>3. Por eso casi siempre hay pocas señales.</b> La ventaja real es chica (alrededor de +0.31R por operación en el núcleo), así que la regla es pocas entradas, bien dimensionadas.</p>
  <p style="margin:0 0 8px"><b>4. Lo que NO ve el escáner:</b> noticias, dilución, litigios, insiders ni el riesgo de que varias acciones del mismo sector caigan juntas. Por eso cada señal pasa por la lista «Antes de entrar» y por la verificación con Claude.</p>
- <p style="margin:0">Reglas duras: earnings a más de 21 días, sin tope de posiciones abiertas (máximo 2 por sector), no promediar a la baja, y el stop siempre como orden real en IBKR.</p></div></details>`}
+ <p style="margin:0">Reglas duras: earnings a más de 21 días, sin tope de posiciones abiertas ni por sector (el riesgo total sí se vigila), no promediar a la baja, y el stop siempre como orden real en IBKR.</p></div></details>`}
 function pieHoy(){return`<div style="margin:20px 4px 0;display:flex;gap:10px;align-items:center;justify-content:space-between"><span class="muted" style="font-size:12px">App ${APP_VER}${S.scan?' · escáner '+esc(S.scan.version):''}</span><button class="linkbtn" id="rf">Reportar un fallo</button></div><div id="rfm"></div>`}
 S.verd=[];S.lote=null;S.pv=null;S.cer=[];
 async function cargarCer(){const r=await sb.from('sm_posiciones').select('*').eq('estado','cerrada').order('cerrada_en',{ascending:false}).limit(200);S.cer=r.data||[]}
@@ -125,7 +125,7 @@ function antesDeEntrar(r){const sz=sizing(r),e=exposicion(),sec=r.sector||'(sin 
  add(r.large_drop_today?'bad':'ok','No es día de caída fuerte',r.large_drop_today?'Hoy cayó fuerte: veto confirmado en el backtest':'Sin caída fuerte hoy');
  add(enCartera||r.ya_en_otra_cuenta?'bad':'ok','No está ya en cartera',enCartera?'Ya la tienes: no promediar a la baja':r.ya_en_otra_cuenta?'Ya está en la otra cuenta':'Libre');
  add('ok','Sin tope de posiciones',e.n+' abiertas (sin límite de cantidad; el riesgo total sí se vigila)');
- add(nSec<2?'ok':'bad','Máximo 2 por sector',nSec+' abiertas en '+sec);
+ add('ok','Sector sin tope',nSec+' abiertas en '+sec+' (sin límite; las del mismo sector suelen moverse juntas, ojo con el riesgo total)');
  add(pctTot<=10?'ok':'warn','Riesgo total de cartera',money(e.riesgo+riesgoNuevo)+' · '+pctTot.toFixed(1)+'% con esta operación (referencia ≤ 10%)');
  add(ext==null?'warn':ext<=12?'ok':'warn','Extensión sobre EMA21',ext==null?'Sin dato':ext.toFixed(1)+'%'+(ext>12?' · evalúa esperar un retroceso':''));
  add(!v?'warn':(v.veredicto==='ENTRAR'&&v.confianza!=='BAJA')?'ok':(v.veredicto==='ENTRAR'||v.veredicto==='ENTRAR_REDUCIDO')?'warn':'bad','Veredicto de Claude de hoy',v?etiquetaVerd(v):'Falta verificar con Claude');
@@ -230,6 +230,11 @@ let _vig=null;function vigilarCmd(){clearInterval(_vig);let n=0;_vig=setInterval
 
 function sizing(r){const rk=RISK[r.clase];if(!rk)return null;const riskUsd=CAP*rk,dist=r.price-r.stop;if(dist<=0)return null;
  let sh=Math.floor(riskUsd/dist);sh=Math.min(sh,Math.floor(MAXPOS/r.price));return{sh,val:sh*r.price,riesgo:sh*dist}}
+// Tamaño sugerido (alrededor de $3,000 en el núcleo) y dos variantes: un poco menos (-15%) y un poco más (+15%).
+function tamanos(r){const b=sizing(r);if(!b||b.sh<1)return null;const dist=r.price-r.stop;
+ const mk=(et,sh)=>({et,sh,val:sh*r.price,riesgo:sh*dist,pct:sh*dist/CAP*100});
+ const menos=Math.max(1,Math.round(b.sh*0.85)),mas=Math.max(b.sh+1,Math.round(b.sh*1.15));
+ return{menos:mk('Un poco menos (−15%)',menos),base:mk('Sugerido',b.sh),mas:mk('Un poco más (+15%)',mas)}}
 
 const f2=n=>n==null?'—':'$'+Number(n).toFixed(2);
 function textoVerificar(arr){const sc=S.scan;guardarLote(arr);const dia=diaTJ(sc.creado_en);
@@ -239,7 +244,7 @@ function textoVerificar(arr){const sc=S.scan;guardarLote(arr);const dia=diaTJ(sc
  const pl=arr.map((r,i)=>{const c=CLASE[r.clase]||['','',''],sz=sizing(r),ext=r.e21?((r.price/r.e21-1)*100).toFixed(1)+'% sobre EMA21':'—';
   const earn=r.earn_days!=null?`en ${r.earn_days} días (≈ ${fechaMas(dia,r.earn_days)}, confirma la fecha exacta)`:'sin dato';
   const reg=S.pos.filter(p=>p.ticker===r.ticker).map(p=>` | YA REGISTRADA: ${p.acciones??'?'} acc. (${p.cuenta})`).join('')+(r.ya_en_otra_cuenta&&!S.pos.some(p=>p.ticker===r.ticker)?' | YA ESTÁ EN OTRA CUENTA':'');
-  return`- #${i+1} ${r.ticker} | ${c[0]} (Tier ${r.tier}, puntaje ${Math.round(r.total_score)}) | ${r.sector||'—'} | entrada ${f2(r.price)} | no pagar más de ${f2(r.price*1.015)} | stop ${f2(r.stop)} | TP1 ${f2(r.tp1)} (1.5R) | TP2 ${f2(r.tp2)} (2.5R) | earnings ${earn} | RS ${r.rs_rating} | rango 52 sem. ${Math.round(r.pos52)}% | extensión ${ext} | escenario ${r.escenario_label||'—'}${sz?` | tamaño ${c[2]}: ${sz.sh} acc. ≈ ${f2(sz.val)}, riesgo ${f2(sz.riesgo)}`:''}${reg}`}).join('\n');
+  return`- #${i+1} ${r.ticker} | ${c[0]} (Tier ${r.tier}, puntaje ${Math.round(r.total_score)}) | ${r.sector||'—'} | entrada ${f2(r.price)} | no pagar más de ${f2(r.price*1.015)} | stop ${f2(r.stop)} | TP1 ${f2(r.tp1)} (1.5R) | TP2 ${f2(r.tp2)} (2.5R) | earnings ${earn} | RS ${r.rs_rating} | rango 52 sem. ${Math.round(r.pos52)}% | extensión ${ext} | escenario ${r.escenario_label||'—'}${sz&&tamanos(r)?` | tamaño ${c[2]}: ${sz.sh} acc. ≈ ${f2(sz.val)}, riesgo ${f2(sz.riesgo)} (variantes: ${tamanos(r).menos.sh} o ${tamanos(r).mas.sh} acc.)`:''}${reg}`}).join('\n');
  return`Hoy es ${hoyL}. Eres mi segundo par de ojos. El escáner SwingMom mide técnica y fuerza relativa; NO ve noticias. Revisa cada candidato en la web con el protocolo completo: dilución y convertibles, litigios, guía y earnings (fecha exacta), insiders, valuación, calificaciones de analistas, noticias de la empresa y del sector, y eventos macro de la semana. Sé honesto: si no hay ventaja clara, ESPERAR.\n\nEscaneo del ${tjf} (hora de Tijuana).\nMercado: ${sc.mercado_txt||'—'}\n\nMI MARCADOR\n${marcadorTexto()}\n\nTU HISTORIAL COMO FILTRO (para calibrarte)\n${calibracionTexto()}\n\nCANDIDATOS\n${pl}\n\nCapturas de TradingView que adjunto (gráfico diario, velas, con EMA 21/50/200 y volumen): 1) cada ticker a 1 año; 2) cada ticker con zoom a los últimos 3 meses (la base actual); 3) el ETF de su sector a 1 año; 4) SPY a 6 meses. Si falta alguna, dímelo antes de dar el veredicto.\n\nPrimero tu análisis en lenguaje simple y sin rodeos, por cada ticker, con este formato:\nVEREDICTO: ENTRAR / ESPERAR / DESCARTAR · CONFIANZA: ALTA / MEDIA / BAJA\nEntrada ideal · No pagar más de · Stop · TP1 · TP2 · Acciones y riesgo en dólares · Earnings\nBanderas (verde/amarillo/rojo): dilución, litigios, guía, insiders, valuación, sector, extensión\nQué veo en el gráfico:\nQué haría y a qué hora (hora de Tijuana):\n\nDESPUÉS, al FINAL de toda tu respuesta, agrega este bloque exacto, una línea por candidato:\nVEREDICTOS\n#1 | ENTRAR o ESPERAR o DESCARTAR | ALTA, MEDIA o BAJA | razón en pocas palabras\nReglas del bloque: usa los mismos números # (nunca solo el ticker), separa con "|" y no escribas nada después del bloque. ALTA = noticias claramente a favor; MEDIA = sin noticias en contra; BAJA = ventaja delgada o duda. Si hay earnings en 21 días o menos, o el candidato ya no aplica, responde DESCARTAR y di por qué.`}
 async function copiar(txt,btn){let ok=false;try{await navigator.clipboard.writeText(txt);ok=true}catch(e){try{const t=document.createElement('textarea');t.value=txt;t.style.position='fixed';t.style.opacity='0';document.body.appendChild(t);t.select();ok=document.execCommand('copy');t.remove()}catch(x){}}
  const o=btn.textContent;btn.textContent=ok?'Copiado ✓ — pégalo en Claude':'No se pudo copiar';setTimeout(()=>{btn.textContent=o},2500)}
@@ -282,12 +287,13 @@ function detalle(){const r=S.scan.payload.results.find(x=>x.ticker===S.det);cons
  <div class="row"><span class="k">Stop</span><span class="v dn">${money(r.stop)}</span></div>
  <div class="row"><span class="k">TP1 · stop a breakeven</span><span class="v up">${money(r.tp1)}</span></div>
  <div class="row"><span class="k">TP2 · salida final</span><span class="v up">${money(r.tp2)}</span></div>
- <div class="row"><span class="k">Tamaño (${c[2]})</span><span class="v">${sz?sz.sh+' acc. · '+money(sz.val):'—'}</span></div>
- <div class="row"><span class="k">Riesgo en dólares</span><span class="v">${sz?money(sz.riesgo):'—'}</span></div>
+ ${(()=>{const t=tamanos(r);if(!t)return`<div class="row"><span class="k">Tamaño (${c[2]})</span><span class="v">—</span></div>`;
+  const fila=(x,k)=>`<div class="row"><span class="k">${k}</span><span class="v" style="text-align:right">${x.sh} acc. · ${money(x.val)}<br><span class="muted" style="font-size:12px">riesgo ${money(x.riesgo)} · ${x.pct.toFixed(1)}% del capital</span></span></div>`;
+  return fila(t.base,'Tamaño sugerido ('+c[2]+')')+fila(t.menos,t.menos.et)+fila(t.mas,t.mas.et)})()}
  <div class="row"><span class="k">Earnings</span><span class="v">${esc(r.earn_label||'—')}</span></div>
  <div class="row"><span class="k">Rango 52 sem. · RS</span><span class="v">${Math.round(r.pos52)}% · ${r.rs_rating}</span></div>
  <div class="row"><span class="k">Escenario histórico</span><span class="v">${esc(r.escenario_label||'—')}</span></div></div>
- <p class="muted" style="padding:0 4px">Tamaño sobre $10,000, tope $3,000 por posición. Antes de entrar: verificación con Claude (pestaña Claude). El stop debe ser una orden real en el broker.</p>
+ <p class="muted" style="padding:0 4px">Tamaño sobre $10,000, sugerido hasta $3,000 por posición (la variante «un poco más» puede pasar de $3,000: decides tú; mira el riesgo en dólares). Antes de entrar: verificación con Claude (pestaña Claude). El stop debe ser una orden real en el broker.</p>
  ${RISK[r.clase]?antesDeEntrar(r):''}
  <div class="card pad"><div class="t">Mi decisión</div>${(S.dec.filter(d=>(d.contexto||{}).ticker===r.ticker).slice(0,3).map(d=>{const k=DEC[(d.contexto||{}).decision]||['',''];return`<div class="s" style="margin-top:8px"><span class="pill ${k[1]}" style="margin:0 6px 0 0">${k[0]}</span>${esc(d.fecha)}${d.cuerpo_md?' · '+esc(d.cuerpo_md):''}</div>`}).join(''))}
  <div class="seg" id="dsg">${['ENTRE','ESPERE','DESCARTE'].map(k=>`<button data-d="${k}">${DEC[k][0]}</button>`).join('')}</div><div id="dform"></div></div>
