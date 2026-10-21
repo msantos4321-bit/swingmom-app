@@ -10,7 +10,7 @@ const L=S.lab={vista:'robots',robot:null,sol:null,borr:null,base:'',nombre:'',pa
 const BAD='background:var(--badbg);color:var(--bad)';
 function toast(m,bad){L.aviso={m,bad};render();setTimeout(()=>{L.aviso=null;if(S.tab==='lab')render()},5000)}
 const pillV=c=>{const v=VER[c]||[c||'—',''];return`<span class="pill ${v[1]}">${v[0]}</span>`};
-function valTxt(p,v){if(v==null)return'—';if(p.tipo==='bool')return v?'Sí':'No';if(Array.isArray(v))return v.length?v.join(', '):'—';return String(v)}
+function valTxt(p,v){if(v==null)return p.clave==='max_posiciones'?'sin tope':'—';if(p.tipo==='bool')return v?'Sí':'No';if(Array.isArray(v))return v.length?v.join(', '):'—';return String(v)}
 function descRegla(r){const full={...DEF,...(r||{})};const out=[];ESQ.forEach(p=>{if(JSON.stringify(full[p.clave])!==JSON.stringify(p.defecto)||['clase_min','riesgo_pct','salida','max_posiciones','max_por_sector'].includes(p.clave))out.push([p.grupo,p.etiqueta,valTxt(p,full[p.clave])])});return out}
 
 async function cargarLab(){

@@ -85,7 +85,7 @@ async function load(){
   sb.from('sm_robot_operaciones').select('robot_id,estado,resultado_r'),
   sb.from('sm_velas').select('ticker,barras')]);
  S.err=a.error?a.error.message:null;S.scan=a.data?.[0]||null;S.pos=b.data||[];S.robots=c.data||[];S.ops=d.data||[];S.velas={};(e.data||[]).forEach(v=>S.velas[v.ticker]=v.barras);try{await cargarLab()}catch(x){}try{await cargarCmd()}catch(x){}try{await cargarDec()}catch(x){}try{await cargarVerd()}catch(x){}try{await cargarSen()}catch(x){}try{await cargarCer()}catch(x){}try{await cargarPush()}catch(x){}}
-const APP_VER='2026-10-21.1';S.errs=[];
+const APP_VER='2026-10-21.2';S.errs=[];
 window.addEventListener('error',e=>{S.errs.push((new Date().toISOString().slice(11,19))+' '+String(e.message||e).slice(0,160))});
 window.addEventListener('unhandledrejection',e=>{S.errs.push((new Date().toISOString().slice(11,19))+' promesa: '+String(e.reason&&e.reason.message||e.reason).slice(0,160))});
 function textoFallo(){const sc=S.scan,c=S.cmd,tz='America/Tijuana';
@@ -105,7 +105,7 @@ function comoDecideBox(){return`<details class="card pad" style="margin-top:16px
  <p style="margin:0 0 8px"><b>2. Las separa por clase.</b> Núcleo (puntaje 190 o más): arriesgas 2%. Calificada: arriesgas 1%. El resto solo lo sigue un robot de práctica con dinero simulado.</p>
  <p style="margin:0 0 8px"><b>3. Por eso casi siempre hay pocas señales.</b> La ventaja real es chica (alrededor de +0.31R por operación en el núcleo), así que la regla es pocas entradas, bien dimensionadas.</p>
  <p style="margin:0 0 8px"><b>4. Lo que NO ve el escáner:</b> noticias, dilución, litigios, insiders ni el riesgo de que varias acciones del mismo sector caigan juntas. Por eso cada señal pasa por la lista «Antes de entrar» y por la verificación con Claude.</p>
- <p style="margin:0">Reglas duras: earnings a más de 21 días, máximo 5 posiciones y 2 por sector, no promediar a la baja, y el stop siempre como orden real en IBKR.</p></div></details>`}
+ <p style="margin:0">Reglas duras: earnings a más de 21 días, sin tope de posiciones abiertas (máximo 2 por sector), no promediar a la baja, y el stop siempre como orden real en IBKR.</p></div></details>`}
 function pieHoy(){return`<div style="margin:20px 4px 0;display:flex;gap:10px;align-items:center;justify-content:space-between"><span class="muted" style="font-size:12px">App ${APP_VER}${S.scan?' · escáner '+esc(S.scan.version):''}</span><button class="linkbtn" id="rf">Reportar un fallo</button></div><div id="rfm"></div>`}
 S.verd=[];S.lote=null;S.pv=null;S.cer=[];
 async function cargarCer(){const r=await sb.from('sm_posiciones').select('*').eq('estado','cerrada').order('cerrada_en',{ascending:false}).limit(200);S.cer=r.data||[]}
@@ -114,7 +114,7 @@ function exposicion(){const ib=S.pos.filter(p=>p.cuenta==='IBKR'&&p.tipo!=='apal
  ib.forEach(p=>{if(p.stop&&p.entrada&&p.acciones)riesgo+=Math.max(0,(p.entrada-p.stop)*p.acciones);else sinStop++;if(p.stop_real!==true)sinStopReal++;const z=sec[p.ticker]||'(sin sector)';porSector[z]=(porSector[z]||0)+1});
  return{n:ib.length,riesgo,sinStop,sinStopReal,porSector,pct:riesgo/CAP*100}}
 function riesgoBox(){const e=exposicion();if(!S.pos.length)return'';const col=e.pct>10?'var(--bad)':e.pct>7?'var(--warn,#b26a00)':'inherit';
- return`<div class="card pad" style="margin-top:12px"><div class="row"><span class="k">Riesgo abierto (IBKR)</span><span class="v" style="color:${col}">${money(e.riesgo)} · ${e.pct.toFixed(1)}%</span></div><div class="row"><span class="k">Posiciones · tope 5</span><span class="v">${e.n}/5</span></div>${e.sinStopReal?`<div class="row"><span class="k">Sin stop real confirmado</span><span class="v dn">${e.sinStopReal}</span></div>`:''}</div>`}
+ return`<div class="card pad" style="margin-top:12px"><div class="row"><span class="k">Riesgo abierto (IBKR)</span><span class="v" style="color:${col}">${money(e.riesgo)} · ${e.pct.toFixed(1)}%</span></div><div class="row"><span class="k">Posiciones abiertas · sin tope</span><span class="v">${e.n}</span></div>${e.sinStopReal?`<div class="row"><span class="k">Sin stop real confirmado</span><span class="v dn">${e.sinStopReal}</span></div>`:''}</div>`}
 function alertasPosBox(){const a=(S.scan&&S.scan.payload&&S.scan.payload.alertas_posiciones)||[];if(!a.length)return'';
  const cls={rojo:'bad',amarillo:'warn',verde:'ok'},nom={rojo:'Urgente',amarillo:'Atención',verde:'Objetivo'};
  return`<h2>Tus posiciones · alertas de este escaneo</h2><div class="card pad">${a.slice(0,8).map(x=>`<div class="s" style="margin-top:6px"><span class="pill ${cls[x.nivel]||''}" style="margin:0 6px 0 0">${nom[x.nivel]||''}</span>${esc(x.texto)}</div>`).join('')}${a.length>8?`<p class="muted" style="margin:8px 0 0;font-size:13px">…y ${a.length-8} más.</p>`:''}<p class="muted" style="margin:8px 0 0;font-size:12px">Se calculan al escanear (mediodía y bajo demanda), no minuto a minuto.</p></div>`}
@@ -124,7 +124,7 @@ function antesDeEntrar(r){const sz=sizing(r),e=exposicion(),sec=r.sector||'(sin 
  add(r.earn_days==null?'warn':r.earn_days>21?'ok':'bad','Earnings a más de 21 días',r.earn_days==null?'Sin dato de earnings: confirma la fecha':r.earn_days+' días');
  add(r.large_drop_today?'bad':'ok','No es día de caída fuerte',r.large_drop_today?'Hoy cayó fuerte: veto confirmado en el backtest':'Sin caída fuerte hoy');
  add(enCartera||r.ya_en_otra_cuenta?'bad':'ok','No está ya en cartera',enCartera?'Ya la tienes: no promediar a la baja':r.ya_en_otra_cuenta?'Ya está en la otra cuenta':'Libre');
- add(e.n<5?'ok':'bad','Cupo de posiciones',e.n+' de 5 usadas');
+ add('ok','Sin tope de posiciones',e.n+' abiertas (sin límite de cantidad; el riesgo total sí se vigila)');
  add(nSec<2?'ok':'bad','Máximo 2 por sector',nSec+' abiertas en '+sec);
  add(pctTot<=10?'ok':'warn','Riesgo total de cartera',money(e.riesgo+riesgoNuevo)+' · '+pctTot.toFixed(1)+'% con esta operación (referencia ≤ 10%)');
  add(ext==null?'warn':ext<=12?'ok':'warn','Extensión sobre EMA21',ext==null?'Sin dato':ext.toFixed(1)+'%'+(ext>12?' · evalúa esperar un retroceso':''));
