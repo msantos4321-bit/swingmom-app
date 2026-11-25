@@ -66,13 +66,13 @@ const KEY=leerClave();
 const sb=KEY?supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_ANON_KEY,{global:{headers:{'x-sm-key':KEY}},auth:{persistSession:false,autoRefreshToken:false}}):null;
 if(KEY&&!location.hash.includes('k='))history.replaceState(null,'','#k='+KEY);
 if(KEY){try{const m={name:'SwingMom',short_name:'SwingMom',start_url:location.pathname+'#k='+KEY,scope:location.pathname,display:'standalone',background_color:'#F2F2F7',theme_color:'#F2F2F7',icons:[{src:new URL('icon.svg',location.href).href,sizes:'any',type:'image/svg+xml',purpose:'any'}]};const l=document.querySelector('link[rel=manifest]');l.href=URL.createObjectURL(new Blob([JSON.stringify(m)],{type:'application/manifest+json'}))}catch(e){}}
-const ICON={hoy:'<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',cartera:'<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>',lab:'<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/>',claude:'<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>'};
+const ICON={hoy:'<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',cartera:'<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>',lab:'<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/>',claude:'<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>',director:'<path d="M4 19V9M10 19V5M16 19v-8M22 19H2"/>',radar:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="M12 12l6-6"/>'};
 let S={tab:'hoy',scan:null,velas:{},pos:[],robots:[],ops:[],filtro:'Todas',det:null};
 const CLASE={NUCLEO:['Núcleo','ok','2% de riesgo'],CALIFICADA:['Calificada','ac','1% de riesgo'],ROBOT:['Solo robot','','Cuenta simulada'],VIGILANCIA:['Vigilancia','','Sin entrada']};
 const RISK={NUCLEO:.02,CALIFICADA:.01};
 const CAP=10000,MAXPOS=3000;
 
-function nav(){const n=$('#nav');n.hidden=false;n.innerHTML=[['hoy','Hoy'],['cartera','Cartera'],['lab','Laboratorio'],['claude','Claude']].map(([k,l])=>`<button class="${S.tab===k?'on':''}" data-k="${k}"><svg viewBox="0 0 24 24">${ICON[k]}</svg><span>${l}</span></button>`).join('');
+function nav(){const n=$('#nav');n.hidden=false;n.innerHTML=[['hoy','Hoy'],['director','Director'],['radar','Radar'],['cartera','Cartera'],['lab','Lab']].map(([k,l])=>`<button class="${S.tab===k?'on':''}" data-k="${k}"><svg viewBox="0 0 24 24">${ICON[k]}</svg><span>${l}</span></button>`).join('');
  n.querySelectorAll('button').forEach(b=>b.onclick=()=>{S.tab=b.dataset.k;S.det=null;render()})}
 
 function sinClave(msg){$('#nav').hidden=true;app.innerHTML=`<div class="sub">Acceso privado</div><h1>SwingMom</h1><div class="card pad" style="margin-top:20px"><p class="muted" style="margin:0">${msg||'Abre tu enlace privado una vez y la app queda lista en este dispositivo. También puedes pegarlo aquí:'}</p><input id="lk" placeholder="Pega tu enlace privado"><button class="btn" id="go">Entrar</button></div>`;$('#go').onclick=()=>{const m=$('#lk').value.match(/k=([A-Za-z0-9_-]+)/);if(m){try{localStorage.setItem('smk',m[1])}catch(e){}location.hash='k='+m[1];location.reload()}}}
@@ -84,8 +84,8 @@ async function load(){
   sb.from('sm_robots').select('*').order('creado_en'),
   sb.from('sm_robot_operaciones').select('robot_id,estado,resultado_r'),
   sb.from('sm_velas').select('ticker,barras')]);
- S.err=a.error?a.error.message:null;S.scan=a.data?.[0]||null;S.pos=b.data||[];S.robots=c.data||[];S.ops=d.data||[];S.velas={};(e.data||[]).forEach(v=>S.velas[v.ticker]=v.barras);try{await cargarLab()}catch(x){}try{await cargarCmd()}catch(x){}try{await cargarDec()}catch(x){}try{await cargarVerd()}catch(x){}try{await cargarSen()}catch(x){}try{await cargarCer()}catch(x){}try{await cargarPush()}catch(x){}}
-const APP_VER='2026-11-24.2';S.errs=[];
+ S.err=a.error?a.error.message:null;S.scan=a.data?.[0]||null;S.pos=b.data||[];S.robots=c.data||[];S.ops=d.data||[];S.velas={};(e.data||[]).forEach(v=>S.velas[v.ticker]=v.barras);try{await cargarLab()}catch(x){}try{await cargarCmd()}catch(x){}try{await cargarDec()}catch(x){}try{await cargarVerd()}catch(x){}try{await cargarSen()}catch(x){}try{await cargarCer()}catch(x){}try{await cargarPush()}catch(x){}try{await cargarDir()}catch(x){}}
+const APP_VER='2026-11-25.1';S.errs=[];
 window.addEventListener('error',e=>{S.errs.push((new Date().toISOString().slice(11,19))+' '+String(e.message||e).slice(0,160))});
 window.addEventListener('unhandledrejection',e=>{S.errs.push((new Date().toISOString().slice(11,19))+' promesa: '+String(e.reason&&e.reason.message||e.reason).slice(0,160))});
 function textoFallo(){const sc=S.scan,c=S.cmd,tz='America/Tijuana';
@@ -481,7 +481,65 @@ function claudeTab(){const e=CL.estado;
  if(!e)clEstado().then(()=>{if(S.tab==='claude')claudeTab()});
  if(!CL.cargado)clCargar().then(()=>{if(S.tab==='claude')pintarChat()}).catch(()=>{CL.cargado=true})}
 
-function render(){nav();if(S.det&&S.scan)return detalle();({hoy,cartera,lab,claude:claudeTab})[S.tab]()}
+// ── Director y Radar (2026-11-25) ─────────────────────────────
+S.dir={inf:[],libro:[],radar:[],com:[],rv:'A',lv:'abiertas'};
+async function cargarDir(){const[a,b,c,d]=await Promise.all([
+ sb.from('sm_director').select('*').order('fecha',{ascending:false}).order('creado_en',{ascending:false}).limit(21),
+ sb.from('sm_libro').select('*').order('fecha',{ascending:false}),
+ sb.from('lp_radar').select('*').order('radar').order('ticker'),
+ sb.from('sm_comentarios').select('*').order('creado_en',{ascending:false}).limit(5)]);
+ S.dir.inf=a.data||[];S.dir.libro=b.data||[];S.dir.radar=c.data||[];S.dir.com=d.data||[]}
+const fRd=x=>x==null?'—':(x>0?'+':'')+Number(x).toFixed(2)+'R';
+const ESTL={PENDIENTE:['Pendiente de apertura',''],ENTRO:['Entró','ac'],ACTIVADA:['Activada','ac'],ESPERANDO:['Esperando',''],NO_ENTRO:['No entró',''],TP1:['TP1 · stop a entrada','ok'],TP2:['TP2','ok'],STOP:['Stop','bad'],CERRADA:['Cerrada',''],VENCIDA:['Vencida','']};
+function infCard(x,tit){if(!x)return`<div class="card pad"><div class="sub">${tit}</div><p class="muted" style="margin:6px 0 0">Todavía no hay informe.</p></div>`;
+ const lines=String(x.resumen||'').split('\n').filter(Boolean).map(l=>`<li>${esc(l)}</li>`).join('');
+ return`<div class="card pad"><div class="sub">${tit} · ${esc(x.fecha)}</div><div class="t" style="margin:4px 0 6px">${esc(x.titulo)}</div><ul class="steps" style="margin-top:4px">${lines}</ul>${x.cuerpo_md?`<details style="margin-top:6px"><summary class="linkbtn" style="list-style:none">Ver detalle</summary><p class="muted" style="white-space:pre-wrap;margin:6px 0 0">${esc(x.cuerpo_md)}</p></details>`:''}</div>`}
+function marcadorDir(){const L=S.dir.libro.filter(x=>x.sistema==='swing');
+ const ent=L.filter(x=>x.veredicto==='ENTRAR'||x.estado==='ACTIVADA'),res=ent.filter(x=>x.r_final!=null),ab=ent.filter(x=>['ENTRO','ACTIVADA','TP1'].includes(x.estado));
+ const rAc=res.reduce((s,x)=>s+Number(x.r_final),0),rAb=ab.reduce((s,x)=>s+Number(x.r_actual||0),0),gan=res.filter(x=>x.r_final>0).length;
+ const R=S.dir.radar,act=k=>R.filter(x=>x.radar===k&&x.estado==='ACTIVA').length,vig=k=>R.filter(x=>x.radar===k&&String(x.estado).startsWith('VIGILAR')).length;
+ return`<h2>Marcador</h2><div class="card">
+ <div class="row"><span class="k">SwingMom · resueltas</span><span class="v">${res.length} de 15</span></div>
+ <div class="row"><span class="k">R acumulado (resueltas)</span><span class="v ${rAc>0?'up':rAc<0?'dn':''}">${fRd(rAc)}</span></div>
+ <div class="row"><span class="k">Aciertos</span><span class="v">${res.length?gan+' de '+res.length:'—'}</span></div>
+ <div class="row"><span class="k">Abiertas (virtual)</span><span class="v">${ab.length} · ${fRd(rAb)}</span></div>
+ <div class="row"><span class="k">Radar A · vigilando / activas</span><span class="v">${vig('A')} / ${act('A')}</span></div>
+ <div class="row"><span class="k">Radar B · vigilando / activas</span><span class="v">${vig('B')} / ${act('B')}</span></div></div>
+ <p class="muted" style="margin:0 4px 8px;font-size:12px">Papel: Mauricio aún no opera con dinero. Con 15 resueltas se compara contra el escáner sin filtro.</p>`}
+function libroItem(x){const e=ESTL[x.estado]||[x.estado,''];const niv=x.veredicto==='ENTRAR'?`Entrada ${x.entrada} · no pagar más de ${x.no_pagar} · stop ${x.stop} · TP1 ${x.tp1} · TP2 ${x.tp2}`:`${esc(x.condicion||'')} · stop ${x.stop}${x.vence?' · vence '+esc(x.vence):''}`;
+ return`<div class="item" style="cursor:default;align-items:flex-start"><div class="grow"><div class="t">${esc(x.ticker)}<span class="pill ${x.veredicto==='ENTRAR'?'ok':x.veredicto==='DESCARTAR'?'bad':'warn'}">${esc(x.veredicto)} · ${esc(x.confianza||'')}</span><span class="pill ${e[1]}">${esc(e[0])}</span></div>
+ <div class="s">${esc(x.fecha)} · ${niv}${x.acciones?` · ${x.acciones} acc, riesgo $${x.riesgo_usd}`:''}</div>${x.estado_detalle?`<div class="s">${esc(x.estado_detalle)}</div>`:''}<div class="s" style="margin-top:2px">${esc(x.razon||'')}</div></div>
+ <div class="r"><div class="t ${(x.r_final??x.r_actual)>0?'up':(x.r_final??x.r_actual)<0?'dn':''}">${fRd(x.r_final??x.r_actual)}</div></div></div>`}
+function director(){const D=S.dir,ult=t=>D.inf.find(x=>x.tipo===t);
+ const grupos={abiertas:x=>['ENTRO','ACTIVADA','TP1'].includes(x.estado),pendientes:x=>['PENDIENTE','ESPERANDO'].includes(x.estado),cerradas:x=>['TP2','STOP','CERRADA','VENCIDA','NO_ENTRO'].includes(x.estado)};
+ const L=D.libro.filter(x=>x.sistema==='swing').filter(grupos[D.lv]);
+ const fecha=new Date().toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',timeZone:'America/Tijuana'});
+ const pushTxt=S.push&&S.push.est!=='activo'?`<div class="aviso">Los avisos al celular están apagados en este teléfono. <button class="linkbtn" id="dpa" style="font-weight:700">Activar avisos</button></div>`:'';
+ app.innerHTML=`<div class="sub">${fecha} · hora de Tijuana</div><h1>Director</h1>${pushTxt}
+ <h2>Hoy</h2>${infCard(ult('mercado'),'Mercado')}${infCard(ult('escaneo'),'Escaneo y recomendaciones')}
+ ${marcadorDir()}
+ <h2>Libro de recomendaciones</h2><div class="seg" id="lseg">${[['abiertas','Abiertas'],['pendientes','Pendientes'],['cerradas','Cerradas']].map(([k,l])=>`<button data-k="${k}" class="${D.lv===k?'on':''}">${l}</button>`).join('')}</div>
+ <div class="card">${L.length?L.map(libroItem).join(''):'<div class="pad muted">Nada en esta sección.</div>'}</div>
+ ${ult('semanal')?'<h2>Repaso semanal</h2>'+infCard(ult('semanal'),'Domingo'):''}
+ <h2>Escríbele al director</h2><div class="card pad"><textarea id="dct" rows="3" style="width:100%;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--tx);padding:10px 14px;font-size:16px;font-family:inherit" placeholder="Idea, duda o corrección. La leo en la siguiente revisión."></textarea><button class="btn" id="dcb">Enviar</button><div id="dcm"></div>
+ ${D.com.map(c=>`<div class="s" style="margin-top:10px"><b>${new Date(c.creado_en).toLocaleDateString('es-MX',{day:'numeric',month:'short',timeZone:'America/Tijuana'})}:</b> ${esc(c.texto)}${c.respuesta?`<br><span class="up">Director: ${esc(c.respuesta)}</span>`:c.leido?' · leído':''}</div>`).join('')}</div>
+ <div style="margin:16px 4px;display:flex;justify-content:space-between"><button class="linkbtn" id="dcl">Chat con Claude dentro de la app</button><span class="muted" style="font-size:12px">App ${APP_VER}</span></div>`;
+ app.querySelectorAll('#lseg button').forEach(b=>b.onclick=()=>{D.lv=b.dataset.k;render()});
+ $('#dcl').onclick=()=>{S.tab='claude';render()};const pa=$('#dpa');if(pa)pa.onclick=activarPush;
+ $('#dcb').onclick=async()=>{const t=$('#dct').value.trim();if(!t)return;$('#dcb').disabled=true;const r=await sb.from('sm_comentarios').insert({texto:t.slice(0,2000),contexto:'app '+APP_VER});
+  if(r.error){$('#dcm').innerHTML=`<p class="muted dn">No se pudo enviar: ${esc(r.error.message)}</p>`;$('#dcb').disabled=false}else{await cargarDir();render()}}}
+function radar(){const D=S.dir,R=D.radar.filter(x=>x.radar===D.rv);
+ const dist=x=>x.media50&&x.cierre_ref?((x.media50/x.cierre_ref-1)*100):null;
+ app.innerHTML=`<div class="sub">Sistema 2 · largo plazo · papel</div><h1>Radar</h1>
+ <div class="seg" id="rseg">${[['A','Temas · electricidad IA'],['B','Valor-calidad']].map(([k,l])=>`<button data-k="${k}" class="${D.rv===k?'on':''}">${l}</button>`).join('')}</div>
+ <p class="muted" style="margin:0 4px 10px;font-size:13px">${D.rv==='A'?'Empresas en el punto exacto del tema. Solo entran con gatillo técnico.':'Negocios sólidos castigados por el mercado (filtro de 8 puntos).'} Gatillo: cierre sobre la media de 50 días o mínimo más alto. Se invalida si cierra bajo su mínimo de 52 semanas.</p>
+ <div class="card">${R.length?R.map(x=>{const d=dist(x);return`<div class="item" style="cursor:default;align-items:flex-start"><div class="grow"><div class="t">${esc(x.ticker)}<span class="pill ${x.estado==='ACTIVA'?'ok':x.estado==='INVALIDADA'?'bad':''}">${esc(x.estado)}</span><span class="pill ac">${esc(x.confirmacion||'')}</span></div>
+ <div class="s">Ref. ${x.cierre_ref??'—'} · gatillo ${x.media50??'sin dato'}${d!=null?` (${d>0?'+':''}${d.toFixed(1)}%)`:''} · invalida bajo ${x.min52??'—'}${x.max52&&x.cierre_ref?` · ${((x.cierre_ref/x.max52-1)*100).toFixed(0)}% desde máximo`:''}${x.reporte?' · reporte '+esc(x.reporte):''}</div>
+ <div class="s up" style="margin-top:2px">${esc(x.razon||'')}</div><div class="s dn">${esc(x.riesgo||'')}</div>${x.nota?`<div class="s">${esc(x.nota)}</div>`:''}</div></div>`}).join(''):'<div class="pad muted">Sin candidatas.</div>'}</div>
+ <p class="muted" style="margin:6px 4px;font-size:12px">Actualizado: ${R[0]?new Date(R.reduce((m,x)=>x.actualizado>m?x.actualizado:m,'')).toLocaleString('es-MX',{timeZone:'America/Tijuana'}):'—'} · C1 narrativa · C2 negocio confirmado · C3 negocio + gatillo.</p>`;
+ app.querySelectorAll('#rseg button').forEach(b=>b.onclick=()=>{D.rv=b.dataset.k;render()})}
+
+function render(){nav();if(S.det&&S.scan)return detalle();({hoy,cartera,lab,claude:claudeTab,director,radar})[S.tab]()}
 const cargarScripts=()=>['esquema.js','lab.js'].reduce((p,f)=>p.then(()=>new Promise((ok,no)=>{const e=document.createElement('script');e.src=f;e.onload=ok;e.onerror=()=>no(new Error('No cargó '+f));document.head.appendChild(e)})),Promise.resolve());
 async function start(){if(!sb)return sinClave();try{await cargarScripts()}catch(e){app.innerHTML='<p class="muted">'+esc(e.message)+'</p>';return}app.innerHTML='<p class="muted">Cargando…</p>';await load();if(S.err){try{localStorage.removeItem('smk')}catch(e){}return sinClave('No se pudo leer con esta clave ('+S.err+'). Abre de nuevo tu enlace privado.')}render()}
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
