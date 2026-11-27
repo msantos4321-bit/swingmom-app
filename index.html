@@ -85,7 +85,7 @@ async function load(){
   sb.from('sm_robot_operaciones').select('robot_id,estado,resultado_r'),
   sb.from('sm_velas').select('ticker,barras')]);
  S.err=a.error?a.error.message:null;S.scan=a.data?.[0]||null;S.pos=b.data||[];S.robots=c.data||[];S.ops=d.data||[];S.velas={};(e.data||[]).forEach(v=>S.velas[v.ticker]=v.barras);try{await cargarLab()}catch(x){}try{await cargarCmd()}catch(x){}try{await cargarDec()}catch(x){}try{await cargarVerd()}catch(x){}try{await cargarSen()}catch(x){}try{await cargarCer()}catch(x){}try{await cargarPush()}catch(x){}try{await cargarDir()}catch(x){}}
-const APP_VER='2026-11-25.1';S.errs=[];
+const APP_VER='2026-11-27.1';S.errs=[];
 window.addEventListener('error',e=>{S.errs.push((new Date().toISOString().slice(11,19))+' '+String(e.message||e).slice(0,160))});
 window.addEventListener('unhandledrejection',e=>{S.errs.push((new Date().toISOString().slice(11,19))+' promesa: '+String(e.reason&&e.reason.message||e.reason).slice(0,160))});
 function textoFallo(){const sc=S.scan,c=S.cmd,tz='America/Tijuana';
@@ -191,9 +191,20 @@ S.push={est:'?',ult:null,msg:''};
 const listo=(p,ms)=>Promise.race([p,new Promise((_,j)=>setTimeout(()=>j(new Error('sw')),ms))]);
 async function cargarPush(){S.push.msg='';if(!PUSH_OK()){S.push.est='nosoporta';return}
  if(Notification.permission==='denied'){S.push.est='bloqueado';return}
- try{const reg=await listo(navigator.serviceWorker.ready,3000);const sub=await reg.pushManager.getSubscription();S.push.est=(sub&&Notification.permission==='granted')?'activo':'inactivo';
-  if(S.push.est==='activo'){const j=sub.toJSON();await sb.from('sm_push_subs').upsert({endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth,agente:navigator.userAgent.slice(0,150),activo:true},{onConflict:'endpoint'})}}catch(x){S.push.est='inactivo'}
+ try{if(Notification.permission==='granted'){const reg=await listo(navigator.serviceWorker.ready,10000);await asegurarSub(reg,false);S.push.est='activo'}else S.push.est='inactivo'}
+ catch(x){S.push.est=Notification.permission==='granted'?'activo':'inactivo';S.push.msg='No pude revisar la suscripción ahora; lo reintento al volver a abrir la app.'}
  try{const r=await sb.from('sm_notificaciones').select('creado_en,titulo').order('creado_en',{ascending:false}).limit(1);S.push.ult=r.data?.[0]||null}catch(x){}}
+const b64uB=a=>btoa(String.fromCharCode(...a)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+// Renueva sola la suscripción: si el servidor la marcó muerta (404/410), si cambió la llave o si no existe, se crea una nueva sin pedir nada (el permiso ya está dado).
+async function asegurarSub(reg,forzar){const c=await sb.from('sm_config').select('valor').eq('clave','vapid_public').limit(1);const vp=c.data?.[0]?.valor;if(!vp)throw new Error('sin llave pública');
+ let sub=await reg.pushManager.getSubscription();
+ if(sub&&!forzar){const r=await sb.from('sm_push_subs').select('activo').eq('endpoint',sub.endpoint).limit(1);const f=r.data?.[0];
+  let k=null;try{const ak=sub.options&&sub.options.applicationServerKey;if(ak)k=b64uB(new Uint8Array(ak))}catch(e){}
+  if((f&&f.activo===false)||(k&&k!==vp))forzar=true}
+ if(sub&&forzar){try{await sub.unsubscribe()}catch(e){}sub=null}
+ if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:u8(vp)});
+ const j=sub.toJSON();const r=await sb.from('sm_push_subs').upsert({endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth,agente:navigator.userAgent.slice(0,150),activo:true,fallos:0},{onConflict:'endpoint'});if(r.error)throw new Error(r.error.message);return sub}
+let _pushRev=0;document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&sb&&Date.now()-_pushRev>36e5){_pushRev=Date.now();cargarPush().catch(()=>{})}});
 function u8(b){const p='='.repeat((4-b.length%4)%4),r=atob((b+p).replace(/-/g,'+').replace(/_/g,'/'));return Uint8Array.from(r,c=>c.charCodeAt(0))}
 function avisosBox(){const e=S.push.est,u=S.push.ult;let h='';
  if(e==='nosoporta')h='<p class="muted" style="margin:0;font-size:13px">Para recibir avisos en iPhone, abre SwingMom desde su ícono en la pantalla de inicio (no desde Safari).</p>';
@@ -205,10 +216,7 @@ async function activarPush(){const b=$('#pa');if(b){b.disabled=true;b.textConten
  try{const perm=await Notification.requestPermission();if(perm!=='granted'){S.push.est=perm==='denied'?'bloqueado':'inactivo';render();return}
   const c=await sb.from('sm_config').select('valor').eq('clave','vapid_public').limit(1);const vp=c.data?.[0]?.valor;
   if(!vp){alert('Los avisos todavía no están listos en el servidor (se activan con el primer escaneo tras la actualización). Intenta de nuevo en unos minutos.');S.push.est='inactivo';render();return}
-  const reg=await listo(navigator.serviceWorker.ready,5000);let sub=await reg.pushManager.getSubscription();
-  if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:u8(vp)});
-  const j=sub.toJSON();const r=await sb.from('sm_push_subs').upsert({endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth,agente:navigator.userAgent.slice(0,150),activo:true,fallos:0},{onConflict:'endpoint'});
-  if(r.error)throw new Error(r.error.message);S.push.est='activo'}catch(e){alert('No se pudieron activar los avisos: '+e.message);S.push.est='inactivo'}render()}
+  const reg=await listo(navigator.serviceWorker.ready,10000);await asegurarSub(reg,true);S.push.est='activo'}catch(e){alert('No se pudieron activar los avisos: '+e.message);S.push.est='inactivo'}render()}
 async function desactivarPush(){try{const reg=await listo(navigator.serviceWorker.ready,3000);const sub=await reg.pushManager.getSubscription();if(sub){await sb.from('sm_push_subs').delete().eq('endpoint',sub.endpoint);await sub.unsubscribe()}}catch(e){}S.push.est='inactivo';render()}
 async function pruebaPush(){const r=await sb.from('sm_comandos').insert({tipo:'probar_aviso'});if(r.error){alert('No se pudo pedir la prueba: '+r.error.message);return}S.push.msg='Prueba pedida: llega cuando GitHub la revise (hasta 15 min en horario de mercado).';render()}
 function cmdBox(){const c=S.cmd,min=c?(Date.now()-new Date(c.creado_en))/6e4:1e9;let msg='',busy=false;
